@@ -58,12 +58,19 @@ export interface VoiceIntegrationDeps {
   scorer?: BatchEmitter;
 }
 
+// States during which voice coaching may fire. Outside these states
+// (cold_start / scenario_intro / decision / debrief / etc.) the scorer
+// keeps emitting batches but voice must stay silent — otherwise the user
+// hears "Faster" and "Allow recoil" on the dashboard before pressing.
+const VOICE_ACTIVE_STATES = new Set(['compression', 'complication', 'rosc']);
+
 export class VoiceIntegration {
   private cleanups: Array<() => void> = [];
   private bystanderCounter = 0;
   private currentBystanderTier: BystanderTier | null = null;
   private hasFiredScenarioIntro = false;
   private hasFiredCompressionEntry = false;
+  private currentState: string = 'cold_start';
   // Tier 1 cached barks fire per batch (~50ms). Tier 2 streaming phrases
   // arrive ~600ms later from the same batch. We dedupe: if a cached bark
   // fired recently, skip the streaming phrase to avoid double "push harder".
@@ -79,6 +86,7 @@ export class VoiceIntegration {
 
     const onState = (e: Event) => {
       const { from, to } = (e as CustomEvent<{ from: string; to: string }>).detail;
+      this.currentState = to;
 
       // First entry into compression — fire scared Bystander to mask the
       // scenario-gen latency window. Skipped on returns from decision phase
@@ -115,6 +123,7 @@ export class VoiceIntegration {
     const onPhrase = (e: Event) => {
       const phrase = (e as CustomEvent<CoachPhrase>).detail;
       if (!phrase.feedback) return;
+      if (!VOICE_ACTIVE_STATES.has(this.currentState)) return;
       if (Date.now() - this.lastCachedBarkAt < VoiceIntegration.CACHED_VS_STREAMING_DEDUPE_MS) {
         return;
       }
@@ -136,7 +145,18 @@ export class VoiceIntegration {
     // correction doesn't outlive its relevance.
     if (this.deps.scorer) {
       const onBatch = (e: Event) => {
+        // Gate on session state — scorer keeps emitting batches between
+        // sessions but voice must stay silent until the user is actually
+        // doing compressions. Without this, judge hears "Faster" /
+        // "Allow recoil" on the scenario / decision / debrief screens
+        // because the synthetic batches default to too_slow when the pad
+        // is idle.
+        if (!VOICE_ACTIVE_STATES.has(this.currentState)) return;
         const batch = (e as CustomEvent<CompressionBatch>).detail;
+        // Idle batches (zero rate AND zero depth) are the do-nothing path
+        // — should not trigger any coach voice. The patient simulator
+        // handles flatline progression on its own.
+        if (batch.avg_rate === 0 && batch.avg_depth === 0) return;
         const clip = classificationToCachedClip(batch.classification);
         if (!clip) return;
         // Skip 'good_keep_going' if it would fire too often. The 5s queue
