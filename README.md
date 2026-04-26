@@ -52,6 +52,24 @@ NEXT_PUBLIC_ELEVENLABS_VOICE_ID_DISPATCHER=...
 NEXT_PUBLIC_ELEVENLABS_VOICE_ID_BYSTANDER=...
 ```
 
+## Setup (booth day)
+
+1. Plug Arduino UNO R4 Minima into USB.
+2. `cd revive/web && npm run dev`.
+3. Open `http://localhost:3000` in **Chrome** (Web Serial requires Chromium).
+4. Click anywhere to unlock audio. Click **Connect Pad** (or press `Option+Shift+Space` to fall back to keyboard mode).
+5. Click **Begin CPR Protocol** to start a session.
+
+If the pad is unplugged or the user is on Safari/Firefox, keyboard mode lets every spacebar press simulate a compression peak. Same scoring, same coach voice.
+
+## Teardown
+
+1. `Ctrl+C` in the terminal running `npm run dev`.
+2. Unplug the Arduino.
+3. Browser tab can be closed without cleanup — no persistent state outside `.env.local`.
+
+If a dev server orphans (port 3000 stuck): `pkill -f "next dev"` clears it.
+
 ## Stack
 
 - **Hardware**: Arduino UNO R4 Minima + FSR pressure pad → JSON-over-Web-Serial
