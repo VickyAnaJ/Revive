@@ -28,6 +28,14 @@ const OUTPUT_FORMAT = 'mp3_22050_32';
 const STABILITY = 0.5;
 const SIMILARITY_BOOST = 0.8;
 
+export interface VoiceOverrides {
+  voiceId?: string;
+  modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+}
+
 export class VoiceLive implements VoiceLiveLike {
   private readonly apiKey: string;
   private readonly voiceIds: Record<VoiceKey, string>;
@@ -49,15 +57,23 @@ export class VoiceLive implements VoiceLiveLike {
     this.baseUrl = deps.baseUrl ?? DEFAULT_BASE_URL;
   }
 
-  async speak(text: string, voiceKey: VoiceKey, signal?: AbortSignal): Promise<void> {
+  async speak(
+    text: string,
+    voiceKey: VoiceKey,
+    signal?: AbortSignal,
+    overrides?: VoiceOverrides,
+  ): Promise<void> {
     if (signal?.aborted) {
       throw new DOMException('aborted before speak', 'AbortError');
     }
 
-    const voiceId = this.voiceIds[voiceKey];
+    const voiceId = overrides?.voiceId ?? this.voiceIds[voiceKey];
     if (!voiceId) {
       throw new Error(`[C7a] no voice ID configured for ${voiceKey}`);
     }
+    const modelId = overrides?.modelId ?? MODEL_ID;
+    const stability = overrides?.stability ?? STABILITY;
+    const similarityBoost = overrides?.similarityBoost ?? SIMILARITY_BOOST;
 
     const url = `${this.baseUrl}/text-to-speech/${voiceId}/stream?output_format=${OUTPUT_FORMAT}`;
     const start = Date.now();
@@ -72,10 +88,11 @@ export class VoiceLive implements VoiceLiveLike {
       },
       body: JSON.stringify({
         text,
-        model_id: MODEL_ID,
+        model_id: modelId,
         voice_settings: {
-          stability: STABILITY,
-          similarity_boost: SIMILARITY_BOOST,
+          stability,
+          similarity_boost: similarityBoost,
+          ...(overrides?.style !== undefined ? { style: overrides.style } : {}),
         },
       }),
     });

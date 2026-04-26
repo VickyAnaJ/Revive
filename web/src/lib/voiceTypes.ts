@@ -16,6 +16,14 @@ export type VoiceSource = 'cached' | 'streaming' | 'conversational';
 // low/med via abort.
 export type VoicePriority = 'low' | 'med' | 'high';
 
+export interface VoiceRequestOverrides {
+  voiceId?: string;
+  modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+}
+
 export interface AudioRequest {
   channel: VoiceChannel;
   source: VoiceSource;
@@ -31,4 +39,10 @@ export interface AudioRequest {
   // dropped silently. Different buckets play independently. Pass `undefined`
   // to skip cooldown entirely (e.g., scenario intro plays once per session).
   cooldownBucket?: string;
+
+  // Optional per-request overrides for streaming voice (model, voice ID,
+  // stability, similarity, style). Used by the welcome line to swap in a
+  // calm stock voice + softer settings without changing the user's
+  // configured per-channel voice IDs.
+  overrides?: VoiceRequestOverrides;
 }

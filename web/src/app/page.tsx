@@ -443,9 +443,16 @@ export default function Home() {
     return off;
   }, []);
 
-  // Welcome voice — Calm Instructor reads "Welcome to Revive" once on first
-  // mount, after audio unlocks and the voice queue exists. Plays during the
-  // intro sequence so the wordmark reveal lands with audio backing.
+  // Welcome voice — calm soothing nurse delivery for the intro line. Uses
+  // Bella (ElevenLabs stock voice EXAVITQu4vr4xnSDxMaL — universally
+  // available, canonically the softest/calmest female voice in the stock
+  // library) plus tuned settings for subtle, smooth pacing:
+  //   - eleven_multilingual_v2 model: better prosody and breath than flash_v2
+  //   - high stability (0.85): consistent, no sing-song
+  //   - low similarity_boost (0.4): natural, not over-resembled
+  //   - style 0.0: neutral, not theatrical
+  // Punctuation in the text gives the model natural pauses for a measured
+  // welcome rather than rushing through.
   useEffect(() => {
     if (welcomeFiredRef.current) return;
     if (!audioUnlocked) return;
@@ -455,8 +462,15 @@ export default function Home() {
       channel: 'coach',
       source: 'streaming',
       priority: 'high',
-      text: 'Welcome to Revive. Take a breath. When you are ready, begin compressions.',
+      text: 'Welcome to Revive... Take a slow, deep breath... When you are ready, begin compressions.',
       cooldownBucket: 'welcome',
+      overrides: {
+        voiceId: 'EXAVITQu4vr4xnSDxMaL',
+        modelId: 'eleven_multilingual_v2',
+        stability: 0.85,
+        similarityBoost: 0.4,
+        style: 0.0,
+      },
     });
   }, [audioUnlocked]);
 

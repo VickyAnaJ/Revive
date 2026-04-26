@@ -19,7 +19,7 @@
 //    channel may play. Other channels are dropped. Prevents Tier 1/2 from
 //    clobbering CAI mid-conversation.
 
-import type { AudioRequest, VoiceChannel, VoicePriority } from './voiceTypes';
+import type { AudioRequest, VoiceChannel, VoicePriority, VoiceRequestOverrides } from './voiceTypes';
 import type { VoiceCached } from './VoiceCached';
 import type { VoiceFallback } from './VoiceFallback';
 
@@ -29,7 +29,12 @@ import type { VoiceFallback } from './VoiceFallback';
 export type VoiceKey = 'instructor' | 'dispatcher' | 'bystander';
 
 export interface VoiceLiveLike {
-  speak(text: string, voiceKey: VoiceKey, signal?: AbortSignal): Promise<unknown>;
+  speak(
+    text: string,
+    voiceKey: VoiceKey,
+    signal?: AbortSignal,
+    overrides?: VoiceRequestOverrides,
+  ): Promise<unknown>;
 }
 
 function channelToVoiceKey(channel: VoiceChannel): VoiceKey {
@@ -199,7 +204,7 @@ export class AudioQueue {
     const liveTier = (r: AudioRequest, s: AbortSignal) => {
       if (!this.live) throw new Error('live tier unavailable');
       if (!r.text) throw new Error('live requires text');
-      return this.live.speak(r.text, channelToVoiceKey(r.channel), s);
+      return this.live.speak(r.text, channelToVoiceKey(r.channel), s, r.overrides);
     };
     const cachedTier = (r: AudioRequest, s: AbortSignal) => {
       if (!r.clipName) throw new Error('cached requires clipName');
