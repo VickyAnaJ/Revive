@@ -19,7 +19,7 @@ export function ConnectButton({
         type="button"
         disabled
         data-testid="connect-button"
-        className="cursor-not-allowed rounded border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-500"
+        className="btn btn-mono"
         title="Web Serial not available. Press Option+Shift+Space for keyboard mode."
       >
         Web Serial unsupported
@@ -33,9 +33,10 @@ export function ConnectButton({
         type="button"
         onClick={onDisconnect}
         data-testid="connect-button"
-        className="rounded border border-emerald-700 bg-emerald-950 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-900"
+        className="btn btn-mono"
+        style={{ borderColor: 'var(--good)', color: 'var(--good)' }}
       >
-        Connected — disconnect
+        ● Connected — disconnect
       </button>
     );
   }
@@ -45,7 +46,7 @@ export function ConnectButton({
       type="button"
       onClick={onConnect}
       data-testid="connect-button"
-      className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-black hover:bg-emerald-400"
+      className="btn btn-mono"
     >
       Connect Arduino
     </button>
