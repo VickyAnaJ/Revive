@@ -130,7 +130,12 @@ export class VoiceIntegration {
       const priority =
         phrase.priority === 'critical' ? 'high' : phrase.priority === 'high' ? 'med' : 'low';
       audioQueue.enqueue({
-        channel: 'coach',
+        // Compression coach corrections route through the 'dispatcher'
+        // channel so they play in the user's DISPATCHER voice, leaving
+        // the INSTRUCTOR (calm nurse) voice exclusively for the intro
+        // welcome line. Three distinct voices: instructor (welcome),
+        // dispatcher (coach + scenario reading), bystander (reactions).
+        channel: 'dispatcher',
         source: 'streaming',
         priority,
         text: phrase.feedback,

@@ -113,24 +113,16 @@ async function main() {
   if (!instructorVoice) throw new Error('ELEVENLABS_VOICE_ID_INSTRUCTOR missing from .env.local');
   if (!bystanderVoice) throw new Error('ELEVENLABS_VOICE_ID_BYSTANDER missing from .env.local');
 
-  // Voice ID format check. ElevenLabs voice IDs are 20 chars. If INSTRUCTOR
-  // is the wrong length, the upstream API returns 404 voice_not_found and
-  // the generator burns retries on every clip. Detect early and fall back
-  // to DISPATCHER (a known-good voice from the same .env.local) so coach
-  // clips still ship — with a loud warning so the user fixes the config.
-  let coachVoice = instructorVoice;
+  // Coach Tier 1 cached clips use the DISPATCHER voice. INSTRUCTOR (calm
+  // nurse) is reserved for the intro welcome line only — keeping it out
+  // of the compression loop makes the demo's three voices cleanly
+  // distinct: nurse welcomes, dispatcher coaches + reads scenario,
+  // bystander reacts.
   const dispatcherVoice = env.ELEVENLABS_VOICE_ID_DISPATCHER;
-  if (instructorVoice.length !== 20) {
-    console.warn('');
-    console.warn('  WARN  ELEVENLABS_VOICE_ID_INSTRUCTOR has length', instructorVoice.length, '(expected 20).');
-    console.warn('        Falling back to ELEVENLABS_VOICE_ID_DISPATCHER for coach clips.');
-    console.warn('        Fix the env var and re-run with --force to regenerate with the correct voice.');
-    console.warn('');
-    if (!dispatcherVoice || dispatcherVoice.length !== 20) {
-      throw new Error('Cannot fall back: ELEVENLABS_VOICE_ID_DISPATCHER is also invalid');
-    }
-    coachVoice = dispatcherVoice;
+  if (!dispatcherVoice || dispatcherVoice.length !== 20) {
+    throw new Error('ELEVENLABS_VOICE_ID_DISPATCHER missing or invalid (expected 20 chars)');
   }
+  const coachVoice = dispatcherVoice;
 
   const coachDir = join(OUTPUT_ROOT, 'coach');
   const bystanderDir = join(OUTPUT_ROOT, 'bystander');

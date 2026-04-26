@@ -47,7 +47,11 @@ export class VoiceLive implements VoiceLiveLike {
   constructor(deps: VoiceLiveDeps) {
     this.apiKey = deps.apiKey;
     this.voiceIds = deps.voiceIds;
-    this.fetcher = deps.fetcher ?? fetch;
+    // fetch must be bound to its host (window/globalThis) — storing the
+    // bare function strips the `this` and the call throws 'Illegal
+    // invocation' in browsers. Wrap so the call site is a fresh closure
+    // that uses the global fetch directly.
+    this.fetcher = deps.fetcher ?? ((input, init) => globalThis.fetch(input, init));
     this.audioFactory = deps.audioFactory ?? ((src) => new Audio(src));
     this.urlFactory =
       deps.urlFactory ?? {
