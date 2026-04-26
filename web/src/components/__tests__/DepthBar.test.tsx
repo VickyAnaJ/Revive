@@ -39,9 +39,27 @@ describe('DepthBar (Step 5 unit test a)', () => {
     expect(fill.className).toContain('bg-red-500');
   });
 
-  it('uses the normal color class when forceCeiling is false', () => {
+  it('uses the idle color class when no classification has arrived yet', () => {
     render(<DepthBar depth={0.5} />);
     const fill = screen.getByTestId('depth-bar-fill');
+    expect(fill.className).toContain('bg-zinc-700');
+  });
+
+  it('uses emerald for adequate compressions', () => {
+    render(<DepthBar depth={0.5} classification="adequate" />);
+    const fill = screen.getByTestId('depth-bar-fill');
     expect(fill.className).toContain('bg-emerald-500');
+  });
+
+  it('uses amber for off-target classifications', () => {
+    render(<DepthBar depth={0.5} classification="too_shallow" />);
+    const fill = screen.getByTestId('depth-bar-fill');
+    expect(fill.className).toContain('bg-amber-400');
+  });
+
+  it('uses red for force_ceiling classification', () => {
+    render(<DepthBar depth={0.5} classification="force_ceiling" />);
+    const fill = screen.getByTestId('depth-bar-fill');
+    expect(fill.className).toContain('bg-red-500');
   });
 });
