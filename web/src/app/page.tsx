@@ -388,27 +388,10 @@ export default function Home() {
       controllerRef.current.selectDecision(nodeId, choiceId);
       setRecordedDecisionIds((prev) => [...prev, nodeId]);
       setDecisionHistory([...controllerRef.current.decisionHistory]);
-      // Scenario-customized Bystander reaction on decision commit.
-      // Fires through the BYSTANDER voice via streaming flash_v2 so the
-      // panic continues to feel specific to this run. Uses scenario state
-      // so the line varies (sex/age/location) per session.
-      if (audioQueueRef.current && scenario) {
-        const { age, sex } = scenario.patient_profile;
-        const pronoun = (sex || '').toLowerCase().startsWith('f') ? 'her' : 'him';
-        const subject = (sex || '').toLowerCase().startsWith('f') ? 'she' : 'he';
-        const location = scenario.location || 'right here';
-        audioQueueRef.current.enqueue({
-          channel: 'bystander',
-          source: 'streaming',
-          priority: 'high',
-          text: `Please, do something — ${subject}'s still not breathing! ${age} years old, in the ${location}, save ${pronoun}!`,
-          cooldownBucket: `bystander_decision_${nodeId}`,
-        });
-      }
     } catch (err) {
       console.warn('[C9] selectDecision failed', err);
     }
-  }, [recordedDecisionIds, scenario]);
+  }, [recordedDecisionIds]);
 
   const handleEndSession = useCallback(() => {
     if (!controllerRef.current) return;
@@ -517,10 +500,10 @@ export default function Home() {
   // Local 15s countdown for the decision phase. Resets when the node
   // changes. Cosmetic only — the real penalty path is driven by
   // SessionController.applyDecisionDecay regardless of this value.
-  const [decisionTimeLeft, setDecisionTimeLeft] = useState(15);
+  const [decisionTimeLeft, setDecisionTimeLeft] = useState(20);
   useEffect(() => {
     if (sessionState !== 'decision') {
-      setDecisionTimeLeft(15);
+      setDecisionTimeLeft(20);
       return;
     }
     if (decisionTimeLeft <= 0) return;
@@ -818,7 +801,7 @@ export default function Home() {
             <h1>{currentDecisionNode.prompt}</h1>
             <h2>Pick your next action.</h2>
           </div>
-          <CountdownRing seconds={Math.max(0, decisionTimeLeft)} total={15} accent={accent} />
+          <CountdownRing seconds={Math.max(0, decisionTimeLeft)} total={20} accent={accent} />
           <div className="dec-grid">
             {currentDecisionNode.options.map((opt, i) => (
               <button

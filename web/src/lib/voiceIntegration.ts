@@ -18,7 +18,8 @@ import type {
 } from '@/types/contracts';
 import type { SessionController } from '@/controllers/SessionController';
 import type { AudioQueue } from './AudioQueue';
-import { pickBystanderTier, pickBystanderClip, type BystanderTier } from './voiceSelectors';
+// voiceSelectors imports removed — bystander tier swaps and per-batch
+// cached clip picking are no longer used (single-fire bystander only).
 
 // Maps the scorer's classification labels to pre-rendered Tier 1 cached
 // clips. Cached clips fire per-batch at ~50ms latency — judge hears the
@@ -66,8 +67,6 @@ const VOICE_ACTIVE_STATES = new Set(['compression', 'complication', 'rosc']);
 
 export class VoiceIntegration {
   private cleanups: Array<() => void> = [];
-  private bystanderCounter = 0;
-  private currentBystanderTier: BystanderTier | null = null;
   private hasFiredScenarioIntro = false;
   private hasFiredCompressionEntry = false;
   private currentState: string = 'cold_start';
@@ -85,25 +84,9 @@ export class VoiceIntegration {
     const { controller, audioQueue } = this.deps;
 
     const onState = (e: Event) => {
-      const { from, to } = (e as CustomEvent<{ from: string; to: string }>).detail;
+      const { from: _from, to } = (e as CustomEvent<{ from: string; to: string }>).detail;
+      void _from;
       this.currentState = to;
-
-      // First entry into compression — fire scared Bystander to mask the
-      // scenario-gen latency window. Skipped on returns from decision phase
-      // (no need to re-set the scene mid-session).
-      if (to === 'compression' && from !== 'decision' && !this.hasFiredCompressionEntry) {
-        this.hasFiredCompressionEntry = true;
-        const tier: BystanderTier = 'scared';
-        const clip = pickBystanderClip(tier, this.bystanderCounter++);
-        audioQueue.enqueue({
-          channel: 'bystander',
-          source: 'cached',
-          priority: 'high',
-          clipName: `bystander/${clip}`,
-          cooldownBucket: 'bystander_intro',
-        });
-        this.currentBystanderTier = tier;
-      }
 
       // Reset / debrief / cold_start — flush all queued audio so a stale
       // phrase doesn't play after the session has reset.
@@ -207,27 +190,8 @@ export class VoiceIntegration {
     controller.addEventListener('scenario', onScenario);
     this.cleanups.push(() => controller.removeEventListener('scenario', onScenario));
 
-    // Vitals updates → swap Bystander tier when emotional state crosses a
-    // boundary. Doesn't fire on every vitals tick (would spam audio); only
-    // when the *tier* changes.
-    const onVitals = (e: Event) => {
-      const state = (e as CustomEvent<PatientState>).detail;
-      const tier = pickBystanderTier(state.o2, state.rhythm === 'rosc');
-      if (tier !== this.currentBystanderTier && this.currentBystanderTier !== null) {
-        // Tier crossing — fire one variant from the new tier
-        const clip = pickBystanderClip(tier, this.bystanderCounter++);
-        audioQueue.enqueue({
-          channel: 'bystander',
-          source: 'cached',
-          priority: 'med',
-          clipName: `bystander/${clip}`,
-          cooldownBucket: `bystander_tier_${tier}`,
-        });
-        this.currentBystanderTier = tier;
-      }
-    };
-    controller.addEventListener('vitals', onVitals);
-    this.cleanups.push(() => controller.removeEventListener('vitals', onVitals));
+    // Bystander tier swaps on vitals removed — user wants the bystander
+    // to speak only once at the beginning, not continuously as O₂ shifts.
   }
 
   private scenarioToDispatcherText(scenario: Scenario): string {
