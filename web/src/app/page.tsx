@@ -23,6 +23,7 @@ import { TopBar, Stepper, Ambient, CountdownRing } from '@/components/visual/Chr
 import { ECGLine } from '@/components/visual/ECGLine';
 import { RhythmWave } from '@/components/visual/RhythmWave';
 import { Silhouette } from '@/components/visual/Silhouette';
+import { IntroSequence } from '@/components/visual/IntroSequence';
 import type {
   CompressionStats,
   DecisionRecord,
@@ -55,7 +56,11 @@ export default function Home() {
   const decayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rateResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceIntegrationRef = useRef<VoiceIntegration | null>(null);
+  const audioQueueRef = useRef<AudioQueue | null>(null);
+  const welcomeFiredRef = useRef(false);
 
+  const [phase, setPhase] = useState<'intro' | 'app'>('intro');
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -292,17 +297,27 @@ export default function Home() {
       const cached = new VoiceCached();
       const fallbackVoice = new VoiceFallback();
       let live: VoiceLive | undefined;
-      if (elevenApiKey && (instructorVoice || dispatcherVoice || bystanderVoice)) {
+      // ElevenLabs voice IDs are 20 chars. Anything else (truncated, empty,
+      // or paste error) will 404 voice_not_found. Validate length before
+      // committing the ID so we fall back to a known-good voice rather
+      // than burning every flash_v2 call on a malformed voice ID.
+      const validVoice = (id: string | undefined): id is string => !!id && id.length === 20;
+      const validInstructor = validVoice(instructorVoice) ? instructorVoice : undefined;
+      const validDispatcher = validVoice(dispatcherVoice) ? dispatcherVoice : undefined;
+      const validBystander = validVoice(bystanderVoice) ? bystanderVoice : undefined;
+      const anyValid = validInstructor ?? validDispatcher ?? validBystander;
+      if (elevenApiKey && anyValid) {
         const voiceIds: Record<VoiceKey, string> = {
-          instructor: instructorVoice || dispatcherVoice,
-          dispatcher: dispatcherVoice || instructorVoice,
-          bystander: bystanderVoice || dispatcherVoice,
+          instructor: validInstructor ?? anyValid,
+          dispatcher: validDispatcher ?? anyValid,
+          bystander: validBystander ?? anyValid,
         };
         live = new VoiceLive({ apiKey: elevenApiKey, voiceIds });
       } else {
-        console.warn('[C9] voice enabled but ElevenLabs key/voices missing — Tier 2 streaming disabled');
+        console.warn('[C9] voice enabled but ElevenLabs key/valid 20-char voice IDs missing — Tier 2 streaming disabled');
       }
       const queue = new AudioQueue({ cached, fallback: fallbackVoice, live });
+      audioQueueRef.current = queue;
       const integration = new VoiceIntegration({
         controller: controllerRef.current,
         audioQueue: queue,
@@ -411,6 +426,32 @@ export default function Home() {
     return () => clearInterval(id);
   }, [sessionState]);
 
+  // Track AudioContext unlock so we know when voice can play. Browser
+  // autoplay policy blocks any audio before the first user gesture; we can't
+  // queue the welcome line until after AudioUnlockOverlay has been clicked.
+  useEffect(() => {
+    setAudioUnlocked(audioContextManager.unlocked);
+    const off = audioContextManager.subscribe(() => setAudioUnlocked(true));
+    return off;
+  }, []);
+
+  // Welcome voice — Calm Instructor reads "Welcome to Revive" once on first
+  // mount, after audio unlocks and the voice queue exists. Plays during the
+  // intro sequence so the wordmark reveal lands with audio backing.
+  useEffect(() => {
+    if (welcomeFiredRef.current) return;
+    if (!audioUnlocked) return;
+    if (!audioQueueRef.current) return;
+    welcomeFiredRef.current = true;
+    audioQueueRef.current.enqueue({
+      channel: 'coach',
+      source: 'streaming',
+      priority: 'high',
+      text: 'Welcome to Revive. Take a breath. When you are ready, begin compressions.',
+      cooldownBucket: 'welcome',
+    });
+  }, [audioUnlocked]);
+
   // Phase routing for the design's stepper + screen selection.
   const stepNum =
     sessionState === 'debrief' ? 4
@@ -470,6 +511,17 @@ export default function Home() {
   return (
     <div className="stage">
       <AudioUnlockOverlay onUnlock={(ctx) => audioContextManager.bindContext(ctx)} />
+
+      {/* Cinematic intro — REVIVE wordmark reveal + ECG band + light sweep
+          transition. Auto-completes after ~4s; user can SKIP. Plays
+          regardless of audio unlock so the cinematic always shows; the
+          Calm Instructor welcome voice fires separately when audio unlocks.
+          Hidden once the user has progressed past cold_start to avoid
+          replaying on re-renders or HMR. */}
+      {phase === 'intro' && (sessionState === 'cold_start' || sessionState === 'reset') ? (
+        <IntroSequence accent={accent} onComplete={() => setPhase('app')} />
+      ) : null}
+
       {sessionState !== 'cold_start' && sessionState !== 'reset' ? <Ambient beatMs={beatMs} /> : null}
 
       <TopBar
