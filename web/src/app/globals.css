@@ -408,7 +408,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   display: grid; grid-template-rows: 1fr auto;
   gap: 14px;
 }
-.res-grid { display: grid; grid-template-columns: 4fr 8fr; gap: 32px; min-height: 0; }
+.res-grid { display: grid; grid-template-columns: 5fr 7fr; gap: 24px; min-height: 0; }
 .res-left { display: flex; flex-direction: column; justify-content: center; }
 .res-status { display: inline-flex; align-items: center; gap: 8px; color: var(--good); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .22em; margin: 6px 0 14px; }
 .res-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); }
@@ -428,17 +428,17 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .res-score .lbl { display: flex; flex-direction: column; gap: 2px; }
 .res-score .lbl .a { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .26em; color: var(--ink-3); }
 .res-score .lbl .b { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .18em; color: var(--good); font-weight: 600; }
-.res-right { display: flex; flex-direction: column; gap: 20px; min-height: 0; }
-.res-graph-card { padding: 22px 26px; }
-.res-graph { height: 240px; }
-.res-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.res-card { padding: 22px 24px; }
-.res-card .k { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .24em; color: var(--ink-3); }
+.res-right { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.res-graph-card { padding: 16px 20px; }
+.res-graph { height: 130px; }
+.res-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.res-card { padding: 14px 16px; }
+.res-card .k { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: .22em; color: var(--ink-3); }
 .res-card .v {
-  font-family: 'JetBrains Mono', monospace; font-size: 44px;
-  margin-top: 14px; font-weight: 500; line-height: 1;
+  font-family: 'JetBrains Mono', monospace; font-size: 26px;
+  margin-top: 6px; font-weight: 500;
 }
-.res-card .meter { height: 4px; background: rgba(8,24,48,.06); border-radius: 2px; margin-top: 18px; overflow: hidden; }
+.res-card .meter { height: 3px; background: rgba(8,24,48,.06); border-radius: 2px; margin-top: 10px; overflow: hidden; }
 .res-card .meter > i { display: block; height: 100%; border-radius: 2px; }
 .res-actions { display: flex; justify-content: flex-end; gap: 12px; }
 

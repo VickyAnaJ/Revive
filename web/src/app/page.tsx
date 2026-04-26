@@ -443,21 +443,21 @@ export default function Home() {
     return off;
   }, []);
 
-  // First-card voice — Panicked Bystander only. Drops the calm-instructor
-  // welcome in favour of a single panicked plea on the opening screen so
-  // the demo opens with urgency rather than a tutorial-style intro. Routes
-  // through the 'bystander' channel → BYSTANDER voice ID via streaming
-  // flash_v2.
+  // Welcome voice — uses the same INSTRUCTOR voice + default settings as
+  // the coach corrections during compression, so the user hears one
+  // consistent character throughout the session. No overrides → falls
+  // through to the channel's configured voice ID (coach → instructor) and
+  // the pinned flash_v2 / stability 0.5 / similarity 0.8 defaults.
   useEffect(() => {
     if (welcomeFiredRef.current) return;
     if (!audioUnlocked) return;
     if (!audioQueueRef.current) return;
     welcomeFiredRef.current = true;
     audioQueueRef.current.enqueue({
-      channel: 'bystander',
+      channel: 'coach',
       source: 'streaming',
       priority: 'high',
-      text: 'Oh god, please — someone has collapsed, do you know CPR? Please help, hurry!',
+      text: 'Welcome to Revive. Take a slow, deep breath. When you are ready, begin compressions.',
       cooldownBucket: 'welcome',
     });
   }, [audioUnlocked]);
