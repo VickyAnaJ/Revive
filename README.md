@@ -1,113 +1,94 @@
 # Revive
 
-CPR practice, anywhere. A force sensing pad, a web app with three Gemini agents, and an ElevenLabs coach that corrects your hands inside two seconds. HackaBull VII (Apr 25 to 26, 2026) entry.
+**CPR practice anywhere.** A pressure-sensitive pad, a real-time AI patient simulator, and a voice that corrects you within 50 milliseconds.
 
-## What this repo is
+Built for HackaBull VII (Apr 26, 2026).
 
-This repo is the build for the system designed in `../docs/pulsehero-design.md`. Layers 0 through 2 (physics, infrastructure, logical design) live in that doc. Layers 3 through 7 (strategy, implementation, code, verification, operations) live here, executed against `../Cascade/build-workflow.md`.
+---
 
-## Governing documents
+## Why
 
-| Doc | Layer | Where |
-|---|---|---|
-| Architecture pipeline (the rules) | L0 to L7 universal | `../Cascade/architecture-pipeline.md` |
-| System design (the answers) | L0 to L2 specific | `../docs/pulsehero-design.md` |
-| Build workflow (the process) | L3 to L7 process | `../Cascade/build-workflow.md` |
-| Winner code patterns (verbatim references) | L4 to L5 implementation | `../docs/winner-code-patterns.md` |
-| Hardware BOM | L1 to L2 hardware | `../docs/hardware-bom.md` |
-| Hackathon rules and tracks | external constraints | `../docs/hackathon-ref.md` |
+Out-of-hospital cardiac arrest survival without bystander CPR is around 10%. With proper compressions, it doubles. The bottleneck is training — not motivation. **Revive trains anyone, anywhere, with $50 of hardware and a browser.**
 
-## Repo layout
+## How it works
+
+You compress a force-sensitive pad. The pad streams pressure peaks over Web Serial. The web app:
+
+1. Generates a fresh emergency scenario via **Gemini 2.5 Flash** (patient demographics, location, decision tree).
+2. Simulates patient physiology in real time — heart rate, BP, rhythm, oxygenation — based on your compression depth and rate.
+3. Coaches you out loud through **three ElevenLabs voices** — a calm instructor for the welcome, a 911 dispatcher reading scenario decisions, a panicked bystander with scenario-customized text.
+4. Scores you against AHA protocol (depth 2.0–2.4", rate 100–120 BPM, recoil quality, decision timing).
+
+Voice replaces the screen, so your eyes stay on the patient.
+
+## Demo flow
+
+1. Cinematic intro → click anywhere → **calm instructor voice** welcomes
+2. Click **BEGIN CPR PROTOCOL** → Gemini generates scenario → **bystander panics** with scenario-specific lines
+3. **Decision screen**: 20-second window, pick first action (CPR / pulse check / call 911 / AED)
+4. **Compression screen**: depth bar, BPM counter, rhythm wave, anatomical silhouette pulsing with rate, dispatcher voice barking corrections per batch ("Push harder", "Slow down", "Allow recoil")
+5. Patient reaches ROSC or flatlines → debrief with performance index, breakdown, retry option
+
+## Run locally
+
+```bash
+git clone https://github.com/VickyAnaJ/Revive.git
+cd Revive/web
+npm install
+cp .env.local.example .env.local   # add ElevenLabs + Gemini keys
+npm run dev
+# open http://localhost:3000 in Chrome
+```
+
+For the hardware: open `firmware/revive_firmware.ino` in Arduino IDE, flash to UNO R4 Minima, plug into USB. The web app auto-detects via Web Serial. No Arduino? Press `Option+Shift+Space` for keyboard fallback.
+
+Required env vars:
+
+```
+NEXT_PUBLIC_GEMINI_API_KEY=...
+NEXT_PUBLIC_ELEVENLABS_API_KEY=...
+NEXT_PUBLIC_ELEVENLABS_VOICE_ID_INSTRUCTOR=...
+NEXT_PUBLIC_ELEVENLABS_VOICE_ID_DISPATCHER=...
+NEXT_PUBLIC_ELEVENLABS_VOICE_ID_BYSTANDER=...
+```
+
+## Stack
+
+- **Hardware**: Arduino UNO R4 Minima + FSR pressure pad → JSON-over-Web-Serial
+- **Web**: Next.js 16 + React 19 + TypeScript + Tailwind 4
+- **AI**: Gemini 2.5 Flash (3 agents — patient simulation, coach phrases, scenario generation)
+- **Voice**: ElevenLabs `eleven_flash_v2` streaming TTS + pre-rendered MP3s + browser SpeechSynthesis fallback
+- **Tests**: Vitest, 222 tests, full TypeScript
+
+## What's in the repo
 
 ```
 revive/
-├── firmware/         C1 ArduinoFirmware (Arduino sketch)
-├── web/              C2 SerialBridge, C3 SessionController, C4 CompressionScorer,
-│                     C6 ScoringRules, C7a/b/c Voice, C8 AudioQueue, C9 GameUI,
-│                     C10 Calibrator, C12 Dashboard, C13 OfflineCache (Next.js)
-├── api/              C5a PatientAgent, C5b CoachAgent, C5c ScenarioAgent,
-│                     C5d AgentBus, C11 LocalSessionLog (FastAPI)
-├── contracts/        Shared JSON schemas (TS + Python) per design §6f
-├── scripts/          Local dev scripts
-└── docs/
-    ├── STATUS.md             traceability matrix and bootstrap audit
-    ├── status/
-    │   ├── slices/           one file per slice
-    │   ├── foundation/       one file per foundation task
-    │   ├── incidents/        post mortem logs
-    │   ├── workflow-changes/ workflow evolution logs
-    │   └── _templates/       SLICE_TEMPLATE.md, FOUNDATION_TEMPLATE.md
-    ├── adr/                  architecture decision records
-    └── external_apis/        one reference doc per external dependency
+├── firmware/    Arduino sketch (force sensor → JSON peaks at 100Hz)
+├── web/         Next.js app — UI, state machine, AI agents, voice pipeline
+├── api/         FastAPI scaffolding (currently unused; agents run client-side)
+├── contracts/   Shared JSON schemas
+└── docs/        Internal design + audit docs (gitignored, kept private)
 ```
 
-Component to directory mapping is `pulsehero-design.md §6d` plus the table above. If a component appears with no directory, the design or the layout is wrong; fix the lower layer first per build workflow governing rules.
+## AI usage
 
-## Setup (zero tribal knowledge per build-workflow 0.V29)
+- **Gemini 2.5 Flash** generates scenarios, simulates patient physiology, and produces coach phrases. Three independent agents with structured JSON output, schema validation, and a 3-tier fallback (retry → cached scenarios → rule-based vitals).
+- **ElevenLabs flash_v2** drives all spoken voice. Three distinct character voices for instructor / dispatcher / bystander. Pre-rendered MP3s for instant coach corrections; streaming for scenario-specific lines.
+- **Claude Code** assisted architecture planning, implementation, and bug fixes during the build.
+- **Claude Design** generated the UI mockup that was hand-converted to React components.
 
-Prerequisites: Node 20 plus, Python 3.11 plus, Arduino IDE 2.x, Chrome or Edge browser (Web Serial API required).
+Core scoring, hardware integration, state machine, and patient physiology rule-based fallback are human-written.
 
-```bash
-# 1. Web app
-cd web
-npm install
-cp .env.local.example .env.local   # then fill in keys
-npm run dev                         # http://localhost:3000
+## Fallbacks
 
-# 2. Backend agents
-cd ../api
-python -m venv .venv
-source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env                # then fill in keys
-uvicorn main:app --reload --port 8000
+When something fails on stage, the demo keeps working:
 
-# 3. Firmware
-# Open firmware/revive_firmware.ino in Arduino IDE.
-# Tools, Board, Arduino UNO R4 Minima.
-# Tools, Port, /dev/cu.usbmodem* (Mac) or COMx (Windows).
-# Upload.
-# Tools, Serial Monitor at 115200 baud to see JSON.
-```
+- **Pad disconnected** → keyboard fallback (`Option+Shift+Space`)
+- **Gemini times out** → cached scenarios + rule-based vitals
+- **ElevenLabs 429 / network down** → browser SpeechSynthesis
+- **Audio blocked** → text overlays preserve every coach correction
 
-Required env vars (drop into `.env.local` and `.env`, never commit):
+## Team
 
-```
-GEMINI_API_KEY=...
-ELEVENLABS_API_KEY=...
-ELEVENLABS_VOICE_ID_INSTRUCTOR=...
-```
-
-## AI usage disclosure (hackathon-ref.md L407)
-
-This project uses AI as a load bearing component, not as a code generator helper.
-
-- **Google Gemini 2.5 Flash** generates emergency scenarios, simulates patient physiology, and produces coach phrases. Three role pipeline (PatientAgent, CoachAgent, ScenarioAgent) with structured JSON output, JSON repair chain, and a three layer fallback per design §6g.
-- **ElevenLabs (eleven_flash_v2)** streams the Calm Instructor coach voice and pre renders the Panicked Bystander scenario intro. Browser SpeechSynthesis covers 911 Dispatcher and Patient ROSC lines for free tier preservation.
-- **Claude Code** assisted with architecture planning during the design phase (Layers 0 to 2 in `../docs/pulsehero-design.md`) and with implementation guidance against the build workflow.
-- **Claude Design** (Anthropic Labs, research preview Apr 2026) generated initial UI for C9 GameUI components (VitalsStrip, RhythmBar, DecisionCard, ScenarioIntro, ResultsScreen). Output was Tailwind JSX, dropped into `web/src/components/` verbatim, then wired to the SessionController via typed props. See `docs/external_apis/claude-design.md` for the integration mechanism.
-
-Core game logic, hardware integration, scoring algorithms, and the patient physiology rule based fallback are human written.
-
-## Contributor onboarding (build-workflow 0.V34)
-
-Read in order:
-1. `../Cascade/architecture-pipeline.md` (the rules, all 21 L0 invariants).
-2. `../docs/pulsehero-design.md` (what we are building, why, with what).
-3. `../Cascade/build-workflow.md` (the process you are inside of right now).
-4. `docs/STATUS.md` (where we are; pick a slice, follow the workflow).
-
-Slice and foundation files copy from `docs/status/_templates/`. Deviation from format is invalid until corrected.
-
-## Execution mode
-
-Solo or collaborative declared in `docs/STATUS.md` Bootstrap section.
-
-## Fallback paths
-
-See `RUNBOOK.md` for the full failure mode chain. Short version:
-- FSR dies → spacebar fallback (FR8).
-- Gemini timeout → cached scenario, then hardcoded.
-- ElevenLabs 429 → browser SpeechSynthesis takes over.
-- Local session JSON write fails → console log of full record so the operator can copy it manually.
-- All cloud fails → `offline_fallback` state (design §3 State Machine).
+Built at HackaBull VII at the University of South Florida.
