@@ -443,16 +443,11 @@ export default function Home() {
     return off;
   }, []);
 
-  // Welcome voice — calm soothing nurse delivery for the intro line. Uses
-  // Bella (ElevenLabs stock voice EXAVITQu4vr4xnSDxMaL — universally
-  // available, canonically the softest/calmest female voice in the stock
-  // library) plus tuned settings for subtle, smooth pacing:
-  //   - eleven_multilingual_v2 model: better prosody and breath than flash_v2
-  //   - high stability (0.85): consistent, no sing-song
-  //   - low similarity_boost (0.4): natural, not over-resembled
-  //   - style 0.0: neutral, not theatrical
-  // Punctuation in the text gives the model natural pauses for a measured
-  // welcome rather than rushing through.
+  // Welcome voice — uses the same INSTRUCTOR voice + default settings as
+  // the coach corrections during compression, so the user hears one
+  // consistent character throughout the session. No overrides → falls
+  // through to the channel's configured voice ID (coach → instructor) and
+  // the pinned flash_v2 / stability 0.5 / similarity 0.8 defaults.
   useEffect(() => {
     if (welcomeFiredRef.current) return;
     if (!audioUnlocked) return;
@@ -462,15 +457,8 @@ export default function Home() {
       channel: 'coach',
       source: 'streaming',
       priority: 'high',
-      text: 'Welcome to Revive... Take a slow, deep breath... When you are ready, begin compressions.',
+      text: 'Welcome to Revive. Take a slow, deep breath. When you are ready, begin compressions.',
       cooldownBucket: 'welcome',
-      overrides: {
-        voiceId: 'EXAVITQu4vr4xnSDxMaL',
-        modelId: 'eleven_multilingual_v2',
-        stability: 0.85,
-        similarityBoost: 0.4,
-        style: 0.0,
-      },
     });
   }, [audioUnlocked]);
 
