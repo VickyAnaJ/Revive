@@ -9,14 +9,53 @@
 // constructor. Call destroy() to detach (used on page unmount or feature
 // flag toggle off mid-session).
 
-import type { Scenario, PatientState, CoachPhrase } from '@/types/contracts';
+import type {
+  Scenario,
+  PatientState,
+  CoachPhrase,
+  CompressionBatch,
+  CompressionClassification,
+} from '@/types/contracts';
 import type { SessionController } from '@/controllers/SessionController';
 import type { AudioQueue } from './AudioQueue';
 import { pickBystanderTier, pickBystanderClip, type BystanderTier } from './voiceSelectors';
 
+// Maps the scorer's classification labels to pre-rendered Tier 1 cached
+// clips. Cached clips fire per-batch at ~50ms latency — judge hears the
+// correction instantly. Returns null for classifications that don't have
+// a cached clip (Tier 2 streaming phrase will still fire for those).
+function classificationToCachedClip(c: CompressionClassification): string | null {
+  switch (c) {
+    case 'too_shallow':
+      return 'coach/push_harder';
+    case 'too_fast':
+      return 'coach/slower';
+    case 'too_slow':
+      return 'coach/faster';
+    case 'force_ceiling':
+      return 'coach/allow_recoil';
+    case 'adequate':
+      return 'coach/good_keep_going';
+    default:
+      return null;
+  }
+}
+
+// Light-weight scorer interface — VoiceIntegration only needs the batch
+// event subscription, not the full CompressionScorer surface. Lets tests
+// pass a stub EventTarget instead of constructing the full scorer.
+export interface BatchEmitter {
+  addEventListener(type: 'batch', listener: (e: Event) => void): void;
+  removeEventListener(type: 'batch', listener: (e: Event) => void): void;
+}
+
 export interface VoiceIntegrationDeps {
   controller: SessionController;
   audioQueue: AudioQueue;
+  // Optional. When provided, VoiceIntegration also listens to scorer batch
+  // events to fire Tier 1 cached coach barks. Without it, coach voice falls
+  // through to Tier 2 streaming only.
+  scorer?: BatchEmitter;
 }
 
 export class VoiceIntegration {
@@ -25,6 +64,11 @@ export class VoiceIntegration {
   private currentBystanderTier: BystanderTier | null = null;
   private hasFiredScenarioIntro = false;
   private hasFiredCompressionEntry = false;
+  // Tier 1 cached barks fire per batch (~50ms). Tier 2 streaming phrases
+  // arrive ~600ms later from the same batch. We dedupe: if a cached bark
+  // fired recently, skip the streaming phrase to avoid double "push harder".
+  private lastCachedBarkAt = 0;
+  private static readonly CACHED_VS_STREAMING_DEDUPE_MS = 4000;
 
   constructor(private readonly deps: VoiceIntegrationDeps) {
     this.attach();
@@ -64,13 +108,16 @@ export class VoiceIntegration {
     controller.addEventListener('state', onState);
     this.cleanups.push(() => controller.removeEventListener('state', onState));
 
-    // CoachAgent emitted a phrase. Stream via flash_v2 (Tier 2) — the
-    // natural-language phrasing is what makes the demo feel alive. Tier 1
-    // cached barks are a follow-up enhancement layered on classification
-    // labels (separate event source); we wire the rich phrase channel here.
+    // CoachAgent emitted a phrase. Stream via flash_v2 (Tier 2). Skipped if
+    // a Tier 1 cached bark fired within the dedupe window — judge would
+    // otherwise hear "Push harder" twice (once cached, once streamed) for
+    // the same compression batch.
     const onPhrase = (e: Event) => {
       const phrase = (e as CustomEvent<CoachPhrase>).detail;
       if (!phrase.feedback) return;
+      if (Date.now() - this.lastCachedBarkAt < VoiceIntegration.CACHED_VS_STREAMING_DEDUPE_MS) {
+        return;
+      }
       const priority =
         phrase.priority === 'critical' ? 'high' : phrase.priority === 'high' ? 'med' : 'low';
       audioQueue.enqueue({
@@ -83,6 +130,32 @@ export class VoiceIntegration {
     };
     controller.addEventListener('phrase', onPhrase);
     this.cleanups.push(() => controller.removeEventListener('phrase', onPhrase));
+
+    // Tier 1 cached coach barks. Fire per batch with ~50ms latency. Cuts
+    // any active Tier 2 streaming phrase via priority='high' so the older
+    // correction doesn't outlive its relevance.
+    if (this.deps.scorer) {
+      const onBatch = (e: Event) => {
+        const batch = (e as CustomEvent<CompressionBatch>).detail;
+        const clip = classificationToCachedClip(batch.classification);
+        if (!clip) return;
+        // Skip 'good_keep_going' if it would fire too often. The 5s queue
+        // cooldown already enforces 5s minimum between identical clips,
+        // but adequate compressions are the common case so we extend to
+        // 8s for that one bucket only by piggybacking on a longer bucket.
+        const isAdequate = batch.classification === 'adequate';
+        const enqueued = audioQueue.enqueue({
+          channel: 'coach',
+          source: 'cached',
+          priority: isAdequate ? 'low' : 'high',
+          clipName: clip,
+          cooldownBucket: clip,
+        });
+        if (enqueued) this.lastCachedBarkAt = Date.now();
+      };
+      this.deps.scorer.addEventListener('batch', onBatch);
+      this.cleanups.push(() => this.deps.scorer!.removeEventListener('batch', onBatch));
+    }
 
     // Scenario load — Dispatcher reads the scene. Plays alongside the
     // Bystander mp3 (Bystander is high-priority and fires first; Dispatcher

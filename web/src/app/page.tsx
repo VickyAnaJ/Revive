@@ -307,7 +307,11 @@ export default function Home() {
         console.warn('[C9] voice enabled but ElevenLabs key/voices missing — Tier 2 streaming disabled');
       }
       const queue = new AudioQueue({ cached, fallback: fallbackVoice, live });
-      const integration = new VoiceIntegration({ controller: controllerRef.current, audioQueue: queue });
+      const integration = new VoiceIntegration({
+        controller: controllerRef.current,
+        audioQueue: queue,
+        scorer: scorerRef.current ?? undefined,
+      });
       voiceIntegrationRef.current = integration;
       console.info('[C9] voice pipeline enabled');
     }
