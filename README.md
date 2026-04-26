@@ -75,10 +75,6 @@ revive/
 
 - **Gemini 2.5 Flash** generates scenarios, simulates patient physiology, and produces coach phrases. Three independent agents with structured JSON output, schema validation, and a 3-tier fallback (retry → cached scenarios → rule-based vitals).
 - **ElevenLabs flash_v2** drives all spoken voice. Three distinct character voices for instructor / dispatcher / bystander. Pre-rendered MP3s for instant coach corrections; streaming for scenario-specific lines.
-- **Claude Code** assisted architecture planning, implementation, and bug fixes during the build.
-- **Claude Design** generated the UI mockup that was hand-converted to React components.
-
-Core scoring, hardware integration, state machine, and patient physiology rule-based fallback are human-written.
 
 ## Fallbacks
 
