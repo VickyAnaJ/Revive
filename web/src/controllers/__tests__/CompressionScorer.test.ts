@@ -42,26 +42,29 @@ describe('CompressionScorer (Step 5 unit tests a-f)', () => {
   });
 
   it('c) mixed shallow + adequate samples → classification reflects average', () => {
-    scorer.addPeak(peak(500, 0.4, 110));
-    scorer.addPeak(peak(1000, 0.45, 110));
-    scorer.addPeak(peak(1500, 0.5, 110));
+    // Default depth target = 0.16 (post-tune). 0.10 / 0.12 / 0.13 averages
+    // to 0.117, well below the target → too_shallow.
+    scorer.addPeak(peak(500, 0.1, 110));
+    scorer.addPeak(peak(1000, 0.12, 110));
+    scorer.addPeak(peak(1500, 0.13, 110));
     const batch = scorer.emitBatch(2000)!;
-    expect(batch.avg_depth).toBeCloseTo(0.45, 5);
+    expect(batch.avg_depth).toBeCloseTo(0.117, 2);
     expect(batch.classification).toBe('too_shallow');
   });
 
-  it('d) sticky floor: once adequate, depth in [0.55, 0.6) stays adequate', () => {
-    scorer.addPeak(peak(500, 0.7, 110));
-    scorer.addPeak(peak(1000, 0.7, 110));
+  it('d) sticky floor: once adequate, depth in [target-offset, target) stays adequate', () => {
+    // Default target = 0.16, sticky offset = 0.03 → sticky floor = 0.13.
+    scorer.addPeak(peak(500, 0.2, 110));
+    scorer.addPeak(peak(1000, 0.2, 110));
     expect(scorer.emitBatch(2000)!.classification).toBe('adequate');
 
-    scorer.addPeak(peak(2500, 0.57, 110));
-    scorer.addPeak(peak(3000, 0.58, 110));
+    scorer.addPeak(peak(2500, 0.14, 110));
+    scorer.addPeak(peak(3000, 0.15, 110));
     const sticky = scorer.emitBatch(4000)!;
     expect(sticky.classification).toBe('adequate');
 
-    scorer.addPeak(peak(4500, 0.52, 110));
-    scorer.addPeak(peak(5000, 0.5, 110));
+    scorer.addPeak(peak(4500, 0.1, 110));
+    scorer.addPeak(peak(5000, 0.1, 110));
     const dropped = scorer.emitBatch(6000)!;
     expect(dropped.classification).toBe('too_shallow');
   });
