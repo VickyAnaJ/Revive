@@ -316,10 +316,25 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   overflow: hidden;
 }
 .cmp-bar-target {
-  position: absolute; left: 0; right: 0;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--good) 18%, transparent), color-mix(in srgb, var(--good) 6%, transparent));
-  border-top: 1px dashed color-mix(in srgb, var(--good) 60%, transparent);
-  border-bottom: 1px dashed color-mix(in srgb, var(--good) 60%, transparent);
+  position: absolute; left: -6px; right: -6px;
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  border-top: 2px solid var(--good);
+  border-bottom: 2px solid var(--good);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--good) 50%, transparent);
+}
+.cmp-bar-target::before {
+  content: "";
+  position: absolute; left: -10px; top: -2px; bottom: -2px;
+  width: 10px;
+  background: var(--good);
+  border-radius: 2px 0 0 2px;
+}
+.cmp-bar-target::after {
+  content: "";
+  position: absolute; right: -10px; top: -2px; bottom: -2px;
+  width: 10px;
+  background: var(--good);
+  border-radius: 0 2px 2px 0;
 }
 .cmp-bar-fill {
   position: absolute; bottom: 0; left: 0; right: 0;
