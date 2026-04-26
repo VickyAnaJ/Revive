@@ -132,7 +132,14 @@ export class SerialBridge extends EventTarget {
 
     const peak = SerialFrameSchema.safeParse(obj);
     if (peak.success) {
-      this.dispatchEvent(new CustomEvent<SerialFrame>('peak', { detail: peak.data }));
+      // Firmware can emit absurd rates (>220 BPM) when peaks fire too close
+      // together during sticky-foam wobble. Clamp to the public consumer
+      // contract [0, 220] before dispatch so downstream stays predictable.
+      const clamped: SerialFrame = {
+        ...peak.data,
+        rate: Math.max(0, Math.min(220, peak.data.rate)),
+      };
+      this.dispatchEvent(new CustomEvent<SerialFrame>('peak', { detail: clamped }));
       return;
     }
 
