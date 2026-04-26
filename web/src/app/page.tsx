@@ -16,17 +16,13 @@ import { VoiceFallback } from '@/lib/VoiceFallback';
 import { VoiceLive } from '@/lib/VoiceLive';
 import { VoiceIntegration } from '@/lib/voiceIntegration';
 import type { VoiceKey } from '@/lib/AudioQueue';
-import { DepthBar } from '@/components/DepthBar';
-import { RateCounter } from '@/components/RateCounter';
 import { ConnectButton } from '@/components/ConnectButton';
 import { AudioUnlockOverlay } from '@/components/AudioUnlockOverlay';
-import { VitalsStrip } from '@/components/VitalsStrip';
-import { ScenarioCard } from '@/components/ScenarioCard';
-import { CoachText } from '@/components/CoachText';
-import { DecisionCard } from '@/components/DecisionCard';
 import { ResultsScreen } from '@/components/ResultsScreen';
-import { CompressionFeedback } from '@/components/CompressionFeedback';
-import { CompressionGoal } from '@/components/CompressionGoal';
+import { TopBar, Stepper, Ambient, CountdownRing } from '@/components/visual/Chrome';
+import { ECGLine } from '@/components/visual/ECGLine';
+import { RhythmWave } from '@/components/visual/RhythmWave';
+import { Silhouette } from '@/components/visual/Silhouette';
 import type {
   CompressionStats,
   DecisionRecord,
@@ -415,68 +411,331 @@ export default function Home() {
     return () => clearInterval(id);
   }, [sessionState]);
 
+  // Phase routing for the design's stepper + screen selection.
+  const stepNum =
+    sessionState === 'debrief' ? 4
+    : sessionState === 'decision' ? 1
+    : (sessionState === 'compression' || sessionState === 'complication' || sessionState === 'rosc') ? 2
+    : 0;
+  const screenLabel = ['SCENARIO 04 / INTRO', 'DECISION POINT 01', 'COMPRESSION CYCLE', 'TELEMETRY', 'SESSION DEBRIEF'][stepNum];
+
+  // Patient HR drives the ambient pulse + silhouette ring. Fallback to 72
+  // before any vitals arrive so the UI doesn't freeze.
+  const beatMs = 60000 / Math.max(50, vitals.hr || 72);
+  const accent = '#0a84ff';
+
+  // Body-type-aware target / floor for the depth bar (preserved from prior
+  // implementation — same math, different rendering).
+  const adequateThreshold = getAdequateDepthThreshold(scenario?.patient_profile.body_type ?? 'adult_average');
+  const targetPct = Math.min(95, Math.max(10, (adequateThreshold / Math.max(0.05, maxSeen)) * 100));
+  const floorPct = Math.min(92, Math.max(5, ((adequateThreshold - 0.03) / Math.max(0.05, maxSeen)) * 100));
+
+  // Live coaching feedback string from the latest scorer batch.
+  const feedback = lastBatch
+    ? lastBatch.classification === 'too_shallow' ? { text: 'PUSH HARDER', tone: 'warn' as const }
+    : lastBatch.classification === 'too_fast'    ? { text: 'SLOW SLIGHTLY', tone: 'warn' as const }
+    : lastBatch.classification === 'too_slow'    ? { text: 'INCREASE RATE', tone: 'warn' as const }
+    : lastBatch.classification === 'force_ceiling' ? { text: 'EASE OFF · TOO DEEP', tone: 'warn' as const }
+    : { text: 'GOOD RHYTHM', tone: 'good' as const }
+    : { text: 'BEGIN COMPRESSIONS', tone: 'good' as const };
+  const fbColor = feedback.tone === 'good' ? 'var(--good)' : 'var(--warn)';
+
+  // Decision node derivation — find the next un-answered node in the tree.
+  const currentDecisionNode = scenario?.decision_tree.find((n) => !recordedDecisionIds.includes(n.id)) ?? null;
+
+  // Decision icons (cycled by option index).
+  const decIcons = ['P', '☏', '♥', '⚡'];
+
+  // Local 15s countdown for the decision phase. Resets when the node
+  // changes. Cosmetic only — the real penalty path is driven by
+  // SessionController.applyDecisionDecay regardless of this value.
+  const [decisionTimeLeft, setDecisionTimeLeft] = useState(15);
+  useEffect(() => {
+    if (sessionState !== 'decision') {
+      setDecisionTimeLeft(15);
+      return;
+    }
+    if (decisionTimeLeft <= 0) return;
+    const id = setTimeout(() => setDecisionTimeLeft((v) => v - 1), 1000);
+    return () => clearTimeout(id);
+  }, [sessionState, decisionTimeLeft, currentDecisionNode?.id]);
+
+  // Compression count from stats.
+  const compressionCount = stats.totalBatches * 12; // approximate display number
+
+  // BPM display value (real or zero).
+  const displayBpm = Math.max(0, Math.min(220, Math.round(rate || vitals.hr || 0)));
+  const targetBpm = displayBpm >= 100 && displayBpm <= 120;
+
   return (
-    <main className="flex min-h-screen flex-col items-center gap-6 bg-zinc-950 p-8 text-zinc-100">
+    <div className="stage">
       <AudioUnlockOverlay onUnlock={(ctx) => audioContextManager.bindContext(ctx)} />
+      {sessionState !== 'cold_start' && sessionState !== 'reset' ? <Ambient beatMs={beatMs} /> : null}
 
-      <header className="flex w-full max-w-3xl items-center justify-between">
-        <h1 className="text-xl font-semibold">Revive</h1>
-        <span className="text-xs text-zinc-500">
-          {keyboardActive ? 'Keyboard mode' : isConnected ? 'Serial connected' : 'Idle'}
-          {calibrated ? ' · calibrated' : ' · default thresholds'}
-          {' · session: '}
-          {sessionState}
-        </span>
-      </header>
+      <TopBar
+        screen={screenLabel}
+        onExit={
+          sessionState === 'compression' || sessionState === 'rosc' || sessionState === 'complication'
+            ? handleEndSession
+            : undefined
+        }
+      />
 
-      <section className="flex w-full max-w-3xl flex-col gap-4">
-        <VitalsStrip
-          vitals={vitals}
-          prevVitals={prevVitals}
-          active={sessionState !== 'cold_start' && sessionState !== 'reset'}
-        />
-        {sessionState === 'compression' || sessionState === 'complication' || sessionState === 'rosc' ? (
-          <CompressionGoal vitals={vitals} stats={stats} />
-        ) : null}
-        {sessionState !== 'debrief' ? (
-          <>
-            <div className="flex items-center justify-center gap-12">
-              <DepthBar
-                depth={depth}
-                forceCeiling={forceCeiling}
-                classification={lastBatch?.classification ?? null}
-                targetPct={Math.min(
-                  95,
-                  Math.max(
-                    10,
-                    (getAdequateDepthThreshold(scenario?.patient_profile.body_type ?? 'adult_average') /
-                      Math.max(0.05, maxSeen)) *
-                      100,
-                  ),
-                )}
-                floorPct={Math.min(
-                  92,
-                  Math.max(
-                    5,
-                    ((getAdequateDepthThreshold(scenario?.patient_profile.body_type ?? 'adult_average') -
-                      0.03) /
-                      Math.max(0.05, maxSeen)) *
-                      100,
-                  ),
-                )}
-              />
-              <RateCounter rate={rate} />
+      {/* SCENARIO SCREEN — cold_start / reset / scenario_intro */}
+      {(sessionState === 'cold_start' || sessionState === 'reset' || sessionState === 'scenario_intro') ? (
+        <div className="scn">
+          <div className="scn-hero">
+            <div className="scn-eyebrow-row">
+              <span className="chip chip-priority">PRIORITY 1</span>
+              <span className="eyebrow">SCENARIO · LIVE TRAINING</span>
+              <span className="eyebrow">{calibrated ? 'CALIBRATED' : 'DEFAULT THRESHOLDS'}</span>
             </div>
-            <CompressionFeedback
-              batch={lastBatch}
-              bodyType={scenario?.patient_profile.body_type}
-            />
-          </>
-        ) : null}
-      </section>
+            <h1 className="scn-title">Cardiac Arrest</h1>
+            <div className="scn-sub">
+              {scenario ? `${scenario.location} · ${scenario.patient_profile.sex}, ${scenario.patient_profile.age}` : 'Ready to begin'}
+            </div>
+            <p className="scn-desc">
+              Press the foam pad to deliver compressions. The AI coach will give real-time corrections,
+              the patient simulator updates vitals every 2 seconds, and a 911 dispatcher reads the
+              scenario aloud through ElevenLabs.
+            </p>
+            {scenario ? (
+              <div className="scn-chips">
+                <span className="chip"><span className="chip-k">AGE</span><span className="chip-v">{scenario.patient_profile.age}</span></span>
+                <span className="chip"><span className="chip-k">SEX</span><span className="chip-v">{String(scenario.patient_profile.sex).toUpperCase()}</span></span>
+                <span className="chip"><span className="chip-k">BUILD</span><span className="chip-v">{String(scenario.patient_profile.body_type).toUpperCase().replace(/_/g, ' ')}</span></span>
+                <span className="chip"><span className="chip-k">SCENARIO</span><span className="chip-v">{String(scenario.scenario_type).toUpperCase()}</span></span>
+              </div>
+            ) : (
+              <div className="scn-chips">
+                <span className="chip"><span className="chip-k">INPUT</span><span className="chip-v">{keyboardActive ? 'KEYBOARD' : isConnected ? 'PAD' : 'NONE'}</span></span>
+                <span className="chip"><span className="chip-k">VOICE</span><span className="chip-v">{process.env.NEXT_PUBLIC_VOICE_ENABLED === 'true' ? 'ON' : 'OFF'}</span></span>
+                <span className="chip"><span className="chip-k">AGENTS</span><span className="chip-v">{agentsReady ? 'READY' : 'LOADING'}</span></span>
+              </div>
+            )}
 
-      <section className="flex w-full max-w-3xl flex-col gap-3">
-        {sessionState === 'debrief' ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 8 }}>
+              <ConnectButton
+                isSupported={isSupported}
+                isConnected={isConnected}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+              />
+              {mounted ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-hero"
+                  onClick={handleStartScenario}
+                  disabled={!canStart}
+                  data-testid="start-scenario-button"
+                >
+                  {isStarting ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          display: 'inline-block',
+                          width: 14, height: 14, borderRadius: '50%',
+                          border: '2px solid rgba(255,255,255,.4)', borderTopColor: 'white',
+                          animation: 'spin 0.7s linear infinite',
+                        }}
+                      />
+                      GENERATING SCENARIO…
+                    </span>
+                  ) : (
+                    <>BEGIN CPR PROTOCOL <span className="kbd">START</span></>
+                  )}
+                </button>
+              ) : null}
+            </div>
+            <div className="scn-foot">ALL ACTIONS WILL BE EVALUATED IN REAL TIME · OPTION+SHIFT+SPACE TOGGLES KEYBOARD</div>
+          </div>
+          <div className="scn-ecg"><ECGLine accent={accent} amp={0.6} speed={1} /></div>
+        </div>
+      ) : null}
+
+      {/* COMPRESSION SCREEN */}
+      {(sessionState === 'compression' || sessionState === 'complication' || sessionState === 'rosc') ? (
+        <div className="cmp">
+          {/* Left: depth bar */}
+          <div className="cmp-col cmp-col-left">
+            <div className="eyebrow" style={{ marginBottom: 14 }}>COMPRESSION DEPTH</div>
+            <div className="cmp-bar-wrap">
+              <div className="cmp-bar-scale">
+                <span>3.0&quot;</span><span className="ok">2.4&quot;</span><span className="ok">2.0&quot;</span>
+                <span>1.5&quot;</span><span>0.5&quot;</span><span>0&quot;</span>
+              </div>
+              <div className="cmp-bar">
+                <div
+                  className="cmp-bar-target"
+                  style={{ top: `${Math.max(0, 100 - targetPct - 10)}%`, height: `${Math.min(40, targetPct - floorPct + 10)}%` }}
+                />
+                <div
+                  className="cmp-bar-fill"
+                  style={{
+                    height: `${Math.min(100, depth * 100)}%`,
+                    background: forceCeiling ? 'var(--crit)' : depth * 100 >= floorPct && depth * 100 <= targetPct + 5 ? 'var(--good)' : accent,
+                    boxShadow: `0 0 16px ${forceCeiling ? 'var(--crit)' : 'var(--accent)'}`,
+                  }}
+                />
+                <div className="cmp-marker" style={{ top: `${100 - Math.min(100, depth * 100)}%` }}>
+                  {(depth * 3).toFixed(1)}&quot;
+                </div>
+              </div>
+            </div>
+            <div
+              className="cmp-bar-status"
+              style={{ color: depth * 100 >= floorPct && depth * 100 <= targetPct + 5 ? 'var(--good)' : 'var(--ink-3)' }}
+            >
+              {depth * 100 >= floorPct && depth * 100 <= targetPct + 5 ? '● IN TARGET' : '○ ADJUSTING'}
+            </div>
+          </div>
+
+          {/* Center: BPM, wave, feedback */}
+          <div className="cmp-col cmp-col-center cmp-center">
+            <div className="eyebrow" style={{ marginBottom: 6 }}>COMPRESSION RATE</div>
+            <div>
+              <span
+                className="cmp-bpm-num"
+                style={{ color: targetBpm ? 'var(--good)' : 'var(--warn)' }}
+                data-testid="rate-counter"
+              >
+                {displayBpm > 0 ? displayBpm : '—'}
+              </span>
+              <span className="cmp-bpm-unit">BPM</span>
+            </div>
+            <div className="eyebrow" style={{ marginTop: 4 }}>TARGET · 100–120 BPM</div>
+            <div style={{ width: '100%', maxWidth: 560, height: 96, marginTop: 18, marginBottom: 8 }}>
+              <RhythmWave accent={accent} bpm={displayBpm > 0 ? displayBpm : 110} />
+            </div>
+            <div
+              className="cmp-feedback"
+              style={{
+                borderColor: fbColor,
+                color: fbColor,
+                background: `color-mix(in srgb, ${fbColor} 8%, transparent)`,
+              }}
+            >
+              <div className="cmp-feedback-eyebrow">FEEDBACK · LIVE</div>
+              <div className="cmp-feedback-text">{feedback.text}</div>
+            </div>
+
+            {/* Mini vitals row below feedback */}
+            <div className="panel vit-strip" style={{ marginTop: 16, width: '100%', maxWidth: 720 }}>
+              <div className="panel-head">
+                <div className="eyebrow">PATIENT VITALS</div>
+                <div className="eyebrow eyebrow--accent">● LIVE</div>
+              </div>
+              <div className="vit-grid">
+                <div className="vit-cell">
+                  <div className="k">HR</div>
+                  <div className={`v ${vitals.hr === 0 ? 'tone-crit' : vitals.hr > 110 ? 'tone-warn' : 'tone-good'}`}>{vitals.hr || '—'}</div>
+                  <div className="u">bpm</div>
+                </div>
+                <div className="vit-cell">
+                  <div className="k">BP</div>
+                  <div className="v compact">{vitals.bp || '—'}</div>
+                  <div className="u">mmHg</div>
+                </div>
+                <div className="vit-cell">
+                  <div className="k">SpO₂</div>
+                  <div className={`v ${vitals.o2 < 80 ? 'tone-crit' : vitals.o2 < 92 ? 'tone-warn' : 'tone-good'}`}>{vitals.o2 || '—'}</div>
+                  <div className="u">%</div>
+                </div>
+                <div className="vit-cell">
+                  <div className="k">RHYTHM</div>
+                  <div
+                    className={`v compact ${vitals.rhythm === 'rosc' || vitals.rhythm === 'sinus' ? 'tone-good' : vitals.rhythm === 'flatline' ? 'tone-crit' : 'tone-warn'}`}
+                  >
+                    {String(vitals.rhythm).toUpperCase().replace('_', '-')}
+                  </div>
+                  <div className="u">{vitals.rhythm === 'v_fib' || vitals.rhythm === 'v_tach' ? 'shockable' : ''}</div>
+                </div>
+                <div className="vit-cell">
+                  <div className="k">ADEQUATE</div>
+                  <div className="v compact tone-good">{stats.adequateBatches}</div>
+                  <div className="u">/ {stats.totalBatches} batches</div>
+                </div>
+                <div className="vit-cell">
+                  <div className="k">INPUT</div>
+                  <div className="v compact">{keyboardActive ? 'KEY' : isConnected ? 'PAD' : '—'}</div>
+                  <div className="u">{calibrated ? 'cal' : 'def'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: counters */}
+          <div className="cmp-col cmp-col-right">
+            <div className="cmp-counter">
+              <div className="eyebrow">COMPRESSIONS</div>
+              <div className="cmp-counter-num" data-testid="compression-counter">
+                {String(compressionCount).padStart(3, '0')}
+              </div>
+              <div className="cmp-counter-tag">CYCLE 30:2</div>
+            </div>
+            <div className="cmp-counter" style={{ marginTop: 28 }}>
+              <div className="eyebrow">CYCLE TIME</div>
+              <div className="cmp-cycle-num">
+                {Math.floor(durationMs / 60000).toString().padStart(2, '0')}:
+                {Math.floor((durationMs / 1000) % 60).toString().padStart(2, '0')}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-mono"
+              style={{ marginTop: 28 }}
+              onClick={handleEndSession}
+              data-testid="end-session-button"
+            >
+              END SESSION →
+            </button>
+          </div>
+
+          {/* Far right: silhouette */}
+          <div className="cmp-col cmp-col-silo">
+            <Silhouette accent={accent} beatMs={beatMs} depth={depth} />
+          </div>
+        </div>
+      ) : null}
+
+      {/* DECISION SCREEN */}
+      {sessionState === 'decision' && currentDecisionNode ? (
+        <div className="dec">
+          <div className="dec-q">
+            <div className="eyebrow eyebrow--accent" style={{ marginBottom: 10 }}>
+              DECISION POINT 0{recordedDecisionIds.length + 1} · {decisionTimeLeft}s WINDOW
+            </div>
+            <h1>{currentDecisionNode.prompt}</h1>
+            <h2>Pick your next action.</h2>
+          </div>
+          <CountdownRing seconds={Math.max(0, decisionTimeLeft)} total={15} accent={accent} />
+          <div className="dec-grid">
+            {currentDecisionNode.options.map((opt, i) => (
+              <button
+                key={opt.id}
+                type="button"
+                className="dec-card"
+                disabled={recordedDecisionIds.includes(currentDecisionNode.id)}
+                onClick={() => handleSelectDecision(currentDecisionNode.id, opt.id)}
+                data-testid={`decision-option-${opt.id}`}
+              >
+                <div className="dec-icon">{decIcons[i % decIcons.length]}</div>
+                <div className="dec-body">
+                  <div className="dec-key">OPTION 0{i + 1}</div>
+                  <div className="dec-label">{opt.label}</div>
+                  <div className="dec-sub">CHOOSE TO COMMIT</div>
+                  <div className="dec-detail">Tap to select. Voice input is also accepted.</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* RESULTS SCREEN — keep existing component, wrap in design container */}
+      {sessionState === 'debrief' ? (
+        <div className="res">
           <ResultsScreen
             scenario={scenario}
             decisions={decisionHistory}
@@ -486,79 +745,15 @@ export default function Home() {
             durationMs={durationMs}
             onReset={handleResetSession}
           />
-        ) : (
-          <>
-            <ScenarioCard scenario={scenario} />
-            <DecisionCard
-              scenario={scenario}
-              visible={sessionState === 'decision'}
-              recordedNodeIds={recordedDecisionIds}
-              onSelect={handleSelectDecision}
-            />
-            {sessionState === 'compression' ||
-            sessionState === 'complication' ||
-            sessionState === 'rosc' ? (
-              // Suppress the agent coach text during any live-telemetry
-              // state. CoachText is the S3 ElevenLabs voice script — once
-              // S3 is wired, the agent talks instead of duplicating the
-              // CompressionFeedback line. Until then, we keep it silent
-              // during compression so the live UI is the single source
-              // of truth. Coach speaks in scenario_intro and decision
-              // states where there's no live feedback to compete with.
-              null
-            ) : (
-              <CoachText phrase={phrase} />
-            )}
-          </>
-        )}
-      </section>
+        </div>
+      ) : null}
 
-      <footer className="flex w-full max-w-3xl flex-wrap items-center justify-center gap-4">
-        <ConnectButton
-          isSupported={isSupported}
-          isConnected={isConnected}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-        />
-        {mounted ? (
-          <button
-            type="button"
-            onClick={handleStartScenario}
-            disabled={!canStart}
-            data-testid="start-scenario-button"
-            className={
-              canStart
-                ? 'rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-black hover:bg-emerald-400'
-                : 'cursor-not-allowed rounded border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-600'
-            }
-          >
-            {isStarting ? (
-              <span className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-300"
-                />
-                Generating scenario…
-              </span>
-            ) : (
-              'Start scenario'
-            )}
-          </button>
-        ) : null}
-        {mounted && (sessionState === 'compression' || sessionState === 'rosc' || sessionState === 'complication') ? (
-          <button
-            type="button"
-            onClick={handleEndSession}
-            data-testid="end-session-button"
-            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
-          >
-            End session
-          </button>
-        ) : null}
-        <span className="text-xs text-zinc-500">
-          Option+Shift+Space toggles keyboard fallback
-        </span>
-      </footer>
-    </main>
+      <Stepper step={stepNum} />
+
+      {/* Keep CSS keyframes for the inline spinner */}
+      <style jsx global>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }
