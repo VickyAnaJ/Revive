@@ -8,12 +8,21 @@ import { ECGLine } from './ECGLine';
 // reveal, ECG band, light sweep transition into the UI.
 //
 // Skips the heart/veins zoom per user direction in chat1.md.
+//
+// Doubles as the audio unlock surface — first click anywhere triggers
+// onUnlock (creates + resumes AudioContext, kicks off welcome voice).
+// Browsers block audio until a user gesture, so this is the earliest
+// moment voice can fire.
 export function IntroSequence({
   onComplete,
+  onUnlock,
   accent,
+  needsUnlock = false,
 }: {
   onComplete: () => void;
+  onUnlock?: () => void;
   accent: string;
+  needsUnlock?: boolean;
 }) {
   const [exiting, setExiting] = useState(false);
   const skipRef = useRef(false);
@@ -28,15 +37,24 @@ export function IntroSequence({
     };
   }, [onComplete]);
 
-  const skip = () => {
+  const skip = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     skipRef.current = true;
     setExiting(true);
     setTimeout(() => onComplete(), 500);
   };
 
+  const handleClick = () => {
+    if (onUnlock) onUnlock();
+  };
+
   const word = 'REVIVE';
   return (
-    <div className={`intro${exiting ? ' exiting' : ''}`}>
+    <div
+      className={`intro${exiting ? ' exiting' : ''}`}
+      onClick={handleClick}
+      style={needsUnlock ? { cursor: 'pointer' } : undefined}
+    >
       <div className="intro-grid" />
       <div className="intro-corner tl">REVIVE / SYS-04</div>
       <div className="intro-corner tr">SCENARIO · CARDIAC</div>
@@ -77,6 +95,26 @@ export function IntroSequence({
       </div>
 
       <div className="intro-sweep" />
+
+      {needsUnlock ? (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 80,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11,
+            letterSpacing: '.32em',
+            color: 'var(--ink-3)',
+            opacity: 0,
+            animation: 'fadeIn 0.6s 0.6s ease-out forwards',
+            pointerEvents: 'none',
+          }}
+        >
+          CLICK ANYWHERE TO BEGIN
+        </div>
+      ) : null}
 
       <button className="intro-skip" onClick={skip}>
         SKIP →

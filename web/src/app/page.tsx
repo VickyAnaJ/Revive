@@ -305,12 +305,16 @@ export default function Home() {
       const validInstructor = validVoice(instructorVoice) ? instructorVoice : undefined;
       const validDispatcher = validVoice(dispatcherVoice) ? dispatcherVoice : undefined;
       const validBystander = validVoice(bystanderVoice) ? bystanderVoice : undefined;
-      const anyValid = validInstructor ?? validDispatcher ?? validBystander;
-      if (elevenApiKey && anyValid) {
+      // Rachel — ElevenLabs stock voice, always available on every account.
+      // Calm female timbre that fits "calm soothing nurse" framing for the
+      // welcome line. Used as the absolute fallback when the user hasn't
+      // configured a valid instructor voice ID.
+      const RACHEL = '21m00Tcm4TlvDq8ikWAM';
+      if (elevenApiKey) {
         const voiceIds: Record<VoiceKey, string> = {
-          instructor: validInstructor ?? anyValid,
-          dispatcher: validDispatcher ?? anyValid,
-          bystander: validBystander ?? anyValid,
+          instructor: validInstructor ?? RACHEL,
+          dispatcher: validDispatcher ?? validInstructor ?? RACHEL,
+          bystander: validBystander ?? validDispatcher ?? RACHEL,
         };
         live = new VoiceLive({ apiKey: elevenApiKey, voiceIds });
       } else {
@@ -508,18 +512,48 @@ export default function Home() {
   const displayBpm = Math.max(0, Math.min(220, Math.round(rate || vitals.hr || 0)));
   const targetBpm = displayBpm >= 100 && displayBpm <= 120;
 
+  // Intro is the unlock surface — first click anywhere on it creates and
+  // resumes the AudioContext, which kicks off the welcome voice via the
+  // unlock effect above. Browsers block audio until a user gesture, so
+  // this is the earliest moment voice can fire on app open.
+  const handleIntroUnlock = useCallback(() => {
+    if (audioContextManager.unlocked) return;
+    try {
+      const Ctor =
+        typeof window !== 'undefined'
+          ? (window.AudioContext ??
+              (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
+          : undefined;
+      if (Ctor) {
+        const ctx = new Ctor();
+        void ctx.resume();
+        audioContextManager.bindContext(ctx);
+      }
+    } catch (err) {
+      console.warn('[C9] intro unlock failed', err);
+    }
+  }, []);
+
   return (
     <div className="stage">
-      <AudioUnlockOverlay onUnlock={(ctx) => audioContextManager.bindContext(ctx)} />
+      {/* Render the unlock overlay only once we're past intro — during the
+          intro the cinematic itself doubles as the unlock surface. */}
+      {phase === 'app' ? (
+        <AudioUnlockOverlay onUnlock={(ctx) => audioContextManager.bindContext(ctx)} />
+      ) : null}
 
       {/* Cinematic intro — REVIVE wordmark reveal + ECG band + light sweep
-          transition. Auto-completes after ~4s; user can SKIP. Plays
-          regardless of audio unlock so the cinematic always shows; the
-          Calm Instructor welcome voice fires separately when audio unlocks.
-          Hidden once the user has progressed past cold_start to avoid
-          replaying on re-renders or HMR. */}
+          transition. Plays IMMEDIATELY on app open (no black overlay first).
+          First click anywhere unlocks audio + fires Calm Instructor welcome
+          voice. Auto-completes after ~4s; user can SKIP. Only renders during
+          cold_start/reset to avoid redrawing mid-session. */}
       {phase === 'intro' && (sessionState === 'cold_start' || sessionState === 'reset') ? (
-        <IntroSequence accent={accent} onComplete={() => setPhase('app')} />
+        <IntroSequence
+          accent={accent}
+          onComplete={() => setPhase('app')}
+          onUnlock={handleIntroUnlock}
+          needsUnlock={!audioUnlocked}
+        />
       ) : null}
 
       {sessionState !== 'cold_start' && sessionState !== 'reset' ? <Ambient beatMs={beatMs} /> : null}
