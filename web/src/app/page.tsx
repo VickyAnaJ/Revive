@@ -9,6 +9,13 @@ import { SessionController, type SessionState } from '@/controllers/SessionContr
 import { AgentBus } from '@/lib/AgentBus';
 import { createGeminiCaller } from '@/lib/geminiClient';
 import { loadFixtures } from '@/lib/OfflineCache';
+import { audioContextManager } from '@/lib/AudioContextManager';
+import { AudioQueue } from '@/lib/AudioQueue';
+import { VoiceCached } from '@/lib/VoiceCached';
+import { VoiceFallback } from '@/lib/VoiceFallback';
+import { VoiceLive } from '@/lib/VoiceLive';
+import { VoiceIntegration } from '@/lib/voiceIntegration';
+import type { VoiceKey } from '@/lib/AudioQueue';
 import { DepthBar } from '@/components/DepthBar';
 import { RateCounter } from '@/components/RateCounter';
 import { ConnectButton } from '@/components/ConnectButton';
@@ -51,6 +58,7 @@ export default function Home() {
   const ceilingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const decayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rateResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceIntegrationRef = useRef<VoiceIntegration | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
@@ -275,6 +283,35 @@ export default function Home() {
     scorer.start();
     fallback.start();
 
+    // Voice pipeline (S3). Behind a feature flag so demo can roll back to
+    // silent S2.5 behaviour in one config flip. When the flag is off this
+    // entire branch is dormant — no extra subscribers, no audio context, no
+    // ElevenLabs API calls.
+    const voiceEnabled = process.env.NEXT_PUBLIC_VOICE_ENABLED === 'true';
+    const elevenApiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY ?? '';
+    const instructorVoice = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID_INSTRUCTOR ?? '';
+    const dispatcherVoice = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID_DISPATCHER ?? '';
+    const bystanderVoice = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID_BYSTANDER ?? '';
+    if (voiceEnabled && controllerRef.current) {
+      const cached = new VoiceCached();
+      const fallbackVoice = new VoiceFallback();
+      let live: VoiceLive | undefined;
+      if (elevenApiKey && (instructorVoice || dispatcherVoice || bystanderVoice)) {
+        const voiceIds: Record<VoiceKey, string> = {
+          instructor: instructorVoice || dispatcherVoice,
+          dispatcher: dispatcherVoice || instructorVoice,
+          bystander: bystanderVoice || dispatcherVoice,
+        };
+        live = new VoiceLive({ apiKey: elevenApiKey, voiceIds });
+      } else {
+        console.warn('[C9] voice enabled but ElevenLabs key/voices missing — Tier 2 streaming disabled');
+      }
+      const queue = new AudioQueue({ cached, fallback: fallbackVoice, live });
+      const integration = new VoiceIntegration({ controller: controllerRef.current, audioQueue: queue });
+      voiceIntegrationRef.current = integration;
+      console.info('[C9] voice pipeline enabled');
+    }
+
     return () => {
       bridge.removeEventListener('peak', onPeak);
       bridge.removeEventListener('ceiling', onCeiling);
@@ -285,6 +322,8 @@ export default function Home() {
       fallback.stop();
       scorer.stop();
       void bridge.disconnect();
+      voiceIntegrationRef.current?.destroy();
+      voiceIntegrationRef.current = null;
       if (ceilingTimeoutRef.current) clearTimeout(ceilingTimeoutRef.current);
       if (decayTimeoutRef.current) clearTimeout(decayTimeoutRef.current);
       if (rateResetTimeoutRef.current) clearTimeout(rateResetTimeoutRef.current);
@@ -374,7 +413,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 bg-zinc-950 p-8 text-zinc-100">
-      <AudioUnlockOverlay />
+      <AudioUnlockOverlay onUnlock={(ctx) => audioContextManager.bindContext(ctx)} />
 
       <header className="flex w-full max-w-3xl items-center justify-between">
         <h1 className="text-xl font-semibold">Revive</h1>

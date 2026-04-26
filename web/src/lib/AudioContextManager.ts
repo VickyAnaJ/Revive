@@ -59,6 +59,21 @@ export class AudioContextManager {
       this.subscribers.delete(fn);
     };
   }
+
+  // Bind to an externally-created AudioContext. Used when an existing UI
+  // (AudioUnlockOverlay) creates the context as part of its click handler
+  // and hands it off rather than calling resume() through this manager.
+  // Idempotent — subsequent calls with a different context are ignored
+  // since the singleton invariant means we honour the first one.
+  bindContext(ctx: AudioContext): void {
+    if (this.ctx) return;
+    this.ctx = ctx;
+    if (ctx.state === 'running') {
+      this._unlocked = true;
+      console.info('[C7d] AudioContext bound and unlocked (external)');
+      this.subscribers.forEach((fn) => fn());
+    }
+  }
 }
 
 export const audioContextManager = new AudioContextManager();
