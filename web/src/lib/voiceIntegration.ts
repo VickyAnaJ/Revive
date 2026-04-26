@@ -199,6 +199,20 @@ export class VoiceIntegration {
         text,
         cooldownBucket: 'scenario_intro',
       });
+      // Scenario-customized Bystander panic line. Fires once per session
+      // alongside the dispatcher reading; AudioQueue serializes them.
+      // Uses scenario context (patient sex / age / location) so the panic
+      // feels specific to this run rather than a generic cached clip.
+      const bystanderLine = this.scenarioToBystanderText(scenario);
+      if (bystanderLine) {
+        audioQueue.enqueue({
+          channel: 'bystander',
+          source: 'streaming',
+          priority: 'med',
+          text: bystanderLine,
+          cooldownBucket: 'bystander_scenario_intro',
+        });
+      }
     };
     controller.addEventListener('scenario', onScenario);
     this.cleanups.push(() => controller.removeEventListener('scenario', onScenario));
@@ -232,6 +246,16 @@ export class VoiceIntegration {
       profile.age >= 65 ? 'elderly' : profile.age >= 40 ? 'middle-aged' : profile.age >= 18 ? 'adult' : 'young';
     const sex = profile.sex || 'patient';
     return `${ageBracket} ${sex}, ${scenario.scenario_type}, ${scenario.location}.`;
+  }
+
+  // Bystander streaming line tailored to the loaded scenario. Voiced in
+  // the BYSTANDER voice ID via flash_v2. Pure read of scenario fields
+  // (patient_profile.{age,sex} + location) — no LLM call.
+  private scenarioToBystanderText(scenario: Scenario): string {
+    const { age, sex } = scenario.patient_profile;
+    const pronoun = (sex || '').toLowerCase().startsWith('f') ? 'she' : 'he';
+    const location = scenario.location || 'here';
+    return `Oh god, please help — ${pronoun} just collapsed in the ${location}! ${pronoun} is ${age} years old, ${pronoun} is not breathing!`;
   }
 
   destroy(): void {

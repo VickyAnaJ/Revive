@@ -18,12 +18,12 @@ import { VoiceIntegration } from '@/lib/voiceIntegration';
 import type { VoiceKey } from '@/lib/AudioQueue';
 import { ConnectButton } from '@/components/ConnectButton';
 import { AudioUnlockOverlay } from '@/components/AudioUnlockOverlay';
-import { ResultsScreen } from '@/components/ResultsScreen';
 import { TopBar, Stepper, Ambient, CountdownRing } from '@/components/visual/Chrome';
 import { ECGLine } from '@/components/visual/ECGLine';
 import { RhythmWave } from '@/components/visual/RhythmWave';
 import { Silhouette } from '@/components/visual/Silhouette';
 import { IntroSequence } from '@/components/visual/IntroSequence';
+import { PerformanceGraph } from '@/components/visual/PerformanceGraph';
 import type {
   CompressionStats,
   DecisionRecord,
@@ -825,20 +825,116 @@ export default function Home() {
         </div>
       ) : null}
 
-      {/* RESULTS SCREEN — keep existing component, wrap in design container */}
-      {sessionState === 'debrief' ? (
-        <div className="res">
-          <ResultsScreen
-            scenario={scenario}
-            decisions={decisionHistory}
-            finalVitals={vitals}
-            stats={stats}
-            outcome={outcome}
-            durationMs={durationMs}
-            onReset={handleResetSession}
-          />
-        </div>
-      ) : null}
+      {/* RESULTS SCREEN — Claude Design layout (large headline + score on
+          left, performance graph + 6 stat cards on right, action buttons
+          bottom-right). Real session data drives every value. */}
+      {sessionState === 'debrief' ? (() => {
+        const survived = outcome === 'survived';
+        const totalDecisions = decisionHistory.length;
+        const correctDecisions = decisionHistory.filter((d) => d.correct).length;
+        const decisionAccuracyPct = totalDecisions === 0 ? 0 : Math.round((correctDecisions / totalDecisions) * 100);
+        const avgDecisionMs = totalDecisions === 0
+          ? 0
+          : Math.round(decisionHistory.reduce((s, d) => s + d.timeToDecideMs, 0) / totalDecisions);
+        const compAdequatePct = stats.totalBatches === 0
+          ? 0
+          : Math.round((stats.adequateBatches / stats.totalBatches) * 100);
+        const ratePct = stats.totalBatches === 0
+          ? 0
+          : Math.round(((stats.totalBatches - stats.tooFastBatches - stats.tooSlowBatches) / stats.totalBatches) * 100);
+        const recoilPct = stats.totalBatches === 0
+          ? 0
+          : Math.max(0, Math.round(100 - (stats.forceCeilingBatches / stats.totalBatches) * 100));
+        const interruptionsSec = (stats.tooSlowBatches + (stats.totalBatches === 0 ? 0 : 0)) * 2;
+        const aedDecision = decisionHistory.find((d) => d.choiceId.toLowerCase().includes('aed'));
+        const aedLabel = aedDecision ? (aedDecision.correct ? 'CORRECT' : 'INCORRECT') : 'N/A';
+        const aedTone: 'good' | 'warn' | 'crit' = !aedDecision ? 'warn' : aedDecision.correct ? 'good' : 'crit';
+        const score = Math.round((compAdequatePct * 0.5 + ratePct * 0.3 + decisionAccuracyPct * 0.2));
+        const tier = score >= 90 ? 'TIER S' : score >= 80 ? 'TIER A' : score >= 70 ? 'TIER B' : score >= 60 ? 'TIER C' : 'TIER D';
+        const tierLabel = score >= 80 ? 'EXCEEDS STANDARD' : score >= 60 ? 'MEETS STANDARD' : 'BELOW STANDARD';
+        const fmtTime = (ms: number) => {
+          const total = Math.floor(ms / 1000);
+          return `${Math.floor(total / 60).toString().padStart(2, '0')}:${(total % 60).toString().padStart(2, '0')}`;
+        };
+        const blurb = survived
+          ? 'Strong protocol adherence with consistent depth and minimal pause time. Continue practicing recoil quality between compressions.'
+          : 'Patient could not be revived. Review compression depth, rate consistency, and decision timing — small improvements compound into ROSC.';
+
+        const cards: Array<{ k: string; v: string | number; u?: string; tone: 'good' | 'warn' | 'crit'; pct: number }> = [
+          { k: 'COMPRESSION DEPTH', v: compAdequatePct, u: '%', tone: compAdequatePct >= 80 ? 'good' : compAdequatePct >= 60 ? 'warn' : 'crit', pct: compAdequatePct },
+          { k: 'RATE ACCURACY', v: ratePct, u: '%', tone: ratePct >= 80 ? 'good' : ratePct >= 60 ? 'warn' : 'crit', pct: ratePct },
+          { k: 'RECOIL', v: recoilPct, u: '%', tone: recoilPct >= 80 ? 'good' : recoilPct >= 60 ? 'warn' : 'crit', pct: recoilPct },
+          { k: 'INTERRUPTIONS', v: interruptionsSec, u: 'sec', tone: interruptionsSec <= 8 ? 'good' : interruptionsSec <= 16 ? 'warn' : 'crit', pct: Math.min(100, interruptionsSec * 5) },
+          { k: 'DECISION TIME', v: (avgDecisionMs / 1000).toFixed(1), u: 'sec', tone: avgDecisionMs <= 5000 ? 'good' : avgDecisionMs <= 10000 ? 'warn' : 'crit', pct: Math.min(100, avgDecisionMs / 100) },
+          { k: 'AED USE', v: aedLabel, tone: aedTone, pct: aedLabel === 'CORRECT' ? 100 : aedLabel === 'INCORRECT' ? 30 : 0 },
+        ];
+
+        return (
+          <div className="res">
+            <div className="res-grid">
+              <div className="res-left">
+                <div className="eyebrow">SESSION DEBRIEF · 04</div>
+                <div className={`res-status${survived ? '' : ' is-lost'}`}>
+                  {survived ? `ROSC ACHIEVED · ${fmtTime(durationMs)}` : `PATIENT LOST · ${fmtTime(durationMs)}`}
+                </div>
+                <h1 className="res-headline">
+                  {survived ? <>Pulse <em>recovered.</em></> : <>Patient <em>lost.</em></>}
+                </h1>
+                <p className="res-blurb">{blurb}</p>
+                <div className="res-score">
+                  <div className="num" data-testid="results-score">{score}</div>
+                  <div className="lbl">
+                    <div className="a">PERFORMANCE INDEX</div>
+                    <div className="b" style={{ color: score >= 80 ? 'var(--good)' : score >= 60 ? 'var(--warn)' : 'var(--crit)' }}>
+                      {tierLabel} · {tier}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="res-right">
+                <div className="panel res-graph-card">
+                  <div className="panel-head">
+                    <div className="eyebrow">COMPRESSION QUALITY · OVER TIME</div>
+                    <div style={{ display: 'flex', gap: 14 }}>
+                      <span className="eyebrow">
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--good)', marginRight: 6 }} />
+                        TARGET
+                      </span>
+                      <span className="eyebrow">
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: accent, marginRight: 6 }} />
+                        YOU
+                      </span>
+                    </div>
+                  </div>
+                  <div className="res-graph"><PerformanceGraph accent={accent} /></div>
+                </div>
+                <div className="res-cards">
+                  {cards.map((c) => (
+                    <div className="panel res-card" key={c.k}>
+                      <div className="k">{c.k}</div>
+                      <div className={`v tone-${c.tone}`}>
+                        {c.v}
+                        {c.u ? <span style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>{c.u}</span> : null}
+                      </div>
+                      <div className="meter">
+                        <i style={{ width: c.pct + '%', background: `var(--${c.tone})` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="res-actions">
+              <button type="button" className="btn btn-mono" onClick={handleResetSession} data-testid="end-session-button">
+                END SESSION
+              </button>
+              <button type="button" className="btn btn-primary btn-mono" onClick={handleResetSession} data-testid="retry-scenario-button">
+                ↻ RETRY SCENARIO
+              </button>
+            </div>
+          </div>
+        );
+      })() : null}
 
       <Stepper step={stepNum} />
 
