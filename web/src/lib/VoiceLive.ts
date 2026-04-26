@@ -104,7 +104,7 @@ export class VoiceLive implements VoiceLiveLike {
         settled = true;
         cleanup();
         const ms = Date.now() - start;
-        console.info(`[C7a] flash_v2 stream end voice=${voiceKey} ms=${ms}`);
+        console.warn(`[C7a] flash_v2 stream end voice=${voiceKey} ms=${ms}`);
         resolve();
       };
       const safeReject = (err: Error) => {
@@ -127,7 +127,7 @@ export class VoiceLive implements VoiceLiveLike {
       audio.addEventListener('error', () => safeReject(new Error('[C7a] audio playback failed')));
       if (signal) signal.addEventListener('abort', onAbort);
 
-      console.info(`[C7a] flash_v2 stream start voice=${voiceKey} chars=${text.length}`);
+      console.warn(`[C7a] flash_v2 stream start voice=${voiceKey} chars=${text.length}`);
       audio.play().catch((err) => safeReject(err as Error));
     });
   }

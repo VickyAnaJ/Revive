@@ -182,8 +182,9 @@ export class AudioQueue {
         return; // success
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') throw err;
-        // Other error — try next tier.
-        console.info(`[C8] tier failed, escalating: ${(err as Error)?.message ?? 'unknown'}`);
+        // Other error — try next tier. Use console.warn so failures show
+        // up in the dev server CLI (console.info is filtered).
+        console.warn(`[C8] tier failed, escalating: ${(err as Error)?.message ?? 'unknown'}`);
       }
     }
 

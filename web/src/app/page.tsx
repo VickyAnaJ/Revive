@@ -317,6 +317,10 @@ export default function Home() {
           bystander: validBystander ?? validDispatcher ?? RACHEL,
         };
         live = new VoiceLive({ apiKey: elevenApiKey, voiceIds });
+        console.warn(
+          `[C9] VoiceLive enabled. instructor=${voiceIds.instructor.slice(0, 6)}… (${validInstructor ? 'configured' : 'Rachel fallback'}) ` +
+            `dispatcher=${voiceIds.dispatcher.slice(0, 6)}… bystander=${voiceIds.bystander.slice(0, 6)}…`,
+        );
       } else {
         console.warn('[C9] voice enabled but ElevenLabs key/valid 20-char voice IDs missing — Tier 2 streaming disabled');
       }
