@@ -1,0 +1,22 @@
+{
+  "too_shallow": {
+    "feedback": "Push past the upper line.",
+    "priority": "high"
+  },
+  "too_fast": {
+    "feedback": "Slow down. Get the number green.",
+    "priority": "medium"
+  },
+  "too_slow": {
+    "feedback": "Faster. Get the number green.",
+    "priority": "high"
+  },
+  "force_ceiling": {
+    "feedback": "Ease up. Bar is red.",
+    "priority": "critical"
+  },
+  "adequate": {
+    "feedback": "Stay here. Both green.",
+    "priority": "low"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "scenario_id": "55555555-5555-4555-8555-555555555555",
+  "scenario_type": "cardiac_arrest",
+  "location": "Family kitchen, late evening",
+  "patient_profile": {
+    "age": 72,
+    "sex": "female",
+    "body_type": "elderly"
+  },
+  "decision_tree": [
+    {
+      "id": "d1",
+      "prompt": "Grandmother collapses while doing dishes. Glass shatters on the floor.",
+      "options": [
+        { "id": "a", "label": "Move her away from the broken glass, check responsiveness" },
+        { "id": "b", "label": "Start CPR on the spot" },
+        { "id": "c", "label": "Wait for someone to clean up the glass first" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -10, "o2": -5 }
+    },
+    {
+      "id": "d2",
+      "prompt": "She is unresponsive and not breathing. Closest neighbor is across the street.",
+      "options": [
+        { "id": "a", "label": "Call 911 on speaker, start CPR while talking to dispatcher" },
+        { "id": "b", "label": "Run to the neighbor first" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -20, "o2": -15 }
+    },
+    {
+      "id": "d3",
+      "prompt": "Dispatcher asks if there is an AED nearby. There is not.",
+      "options": [
+        { "id": "a", "label": "Continue compressions until paramedics arrive" },
+        { "id": "b", "label": "Stop CPR and search the house" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -15, "o2": -10 }
+    }
+  ]
+}

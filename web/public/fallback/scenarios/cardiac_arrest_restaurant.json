@@ -1,0 +1,43 @@
+{
+  "scenario_id": "33333333-3333-4333-8333-333333333333",
+  "scenario_type": "cardiac_arrest",
+  "location": "Crowded restaurant, dinner rush",
+  "patient_profile": {
+    "age": 67,
+    "sex": "male",
+    "body_type": "elderly"
+  },
+  "decision_tree": [
+    {
+      "id": "d1",
+      "prompt": "Diner clutches chest, slumps over the table. Friend at the table screams.",
+      "options": [
+        { "id": "a", "label": "Approach calmly, check responsiveness" },
+        { "id": "b", "label": "Yell at the friend to stop screaming" },
+        { "id": "c", "label": "Wait for the manager" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -10, "o2": -5 }
+    },
+    {
+      "id": "d2",
+      "prompt": "No pulse. Patient is elderly with a small frame. Compressions are about to start.",
+      "options": [
+        { "id": "a", "label": "Use slightly less force; rib fracture risk is real" },
+        { "id": "b", "label": "Press as hard as possible regardless" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -15, "o2": -10 }
+    },
+    {
+      "id": "d3",
+      "prompt": "Patient vomits during compressions.",
+      "options": [
+        { "id": "a", "label": "Roll them on their side, clear the airway, resume" },
+        { "id": "b", "label": "Continue compressions through it" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -10, "o2": -15 }
+    }
+  ]
+}

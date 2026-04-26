@@ -1,0 +1,46 @@
+{
+  "scenario_id": "11111111-1111-4111-8111-111111111111",
+  "scenario_type": "cardiac_arrest",
+  "location": "Public park, weekday afternoon",
+  "patient_profile": {
+    "age": 45,
+    "sex": "male",
+    "body_type": "adult_average"
+  },
+  "decision_tree": [
+    {
+      "id": "d1",
+      "prompt": "Patient just collapsed on the running path. What do you do first?",
+      "options": [
+        { "id": "a", "label": "Check breathing" },
+        { "id": "b", "label": "Call 911" },
+        { "id": "c", "label": "Start CPR" },
+        { "id": "d", "label": "Look for AED" }
+      ],
+      "correct_choice_id": "b",
+      "penalty_delta": { "hr": -10, "o2": -5 }
+    },
+    {
+      "id": "d2",
+      "prompt": "911 dispatcher asks if patient is breathing. They are not. What now?",
+      "options": [
+        { "id": "a", "label": "Check pulse for 10 seconds, then start CPR" },
+        { "id": "b", "label": "Wait for ambulance" },
+        { "id": "c", "label": "Start rescue breaths" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -15, "o2": -10 }
+    },
+    {
+      "id": "d3",
+      "prompt": "Bystander runs over with an AED. Patient still has no pulse. Compressions in progress.",
+      "options": [
+        { "id": "a", "label": "Stop CPR, apply AED pads, follow prompts" },
+        { "id": "b", "label": "Continue CPR, ignore AED" },
+        { "id": "c", "label": "Hand AED to bystander" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -5, "o2": -5 }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "scenario_id": "22222222-2222-4222-8222-222222222222",
+  "scenario_type": "cardiac_arrest",
+  "location": "Open office, mid-morning meeting",
+  "patient_profile": {
+    "age": 58,
+    "sex": "female",
+    "body_type": "adult_large"
+  },
+  "decision_tree": [
+    {
+      "id": "d1",
+      "prompt": "Coworker slumps in their chair mid-sentence. Eyes closed.",
+      "options": [
+        { "id": "a", "label": "Shake their shoulder, ask if they are okay" },
+        { "id": "b", "label": "Start CPR" },
+        { "id": "c", "label": "Call IT" },
+        { "id": "d", "label": "Lay them on the floor immediately" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -5, "o2": -5 }
+    },
+    {
+      "id": "d2",
+      "prompt": "No response. No breathing visible. What now?",
+      "options": [
+        { "id": "a", "label": "Call 911 and start CPR" },
+        { "id": "b", "label": "Move them to a couch" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -20, "o2": -15 }
+    },
+    {
+      "id": "d3",
+      "prompt": "Office AED is in the lobby. Two coworkers are watching, frozen.",
+      "options": [
+        { "id": "a", "label": "Send one to fetch the AED, the other to hold the elevator for paramedics" },
+        { "id": "b", "label": "Send both to fetch the AED" },
+        { "id": "c", "label": "Tell them to stay back" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -5, "o2": -5 }
+    },
+    {
+      "id": "d4",
+      "prompt": "AED arrives. Pads on. AED says shock advised.",
+      "options": [
+        { "id": "a", "label": "Clear, deliver shock, resume compressions" },
+        { "id": "b", "label": "Pause compressions for 60 seconds first" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -10, "o2": -10 }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "scenario_id": "44444444-4444-4444-8444-444444444444",
+  "scenario_type": "cardiac_arrest",
+  "location": "Gym, treadmill row, peak hour",
+  "patient_profile": {
+    "age": 38,
+    "sex": "male",
+    "body_type": "adult_large"
+  },
+  "decision_tree": [
+    {
+      "id": "d1",
+      "prompt": "Runner on treadmill collapses. Treadmill belt still moving.",
+      "options": [
+        { "id": "a", "label": "Hit the emergency stop, then check responsiveness" },
+        { "id": "b", "label": "Pull the runner off the moving belt" },
+        { "id": "c", "label": "Start CPR on the belt" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -10, "o2": -10 }
+    },
+    {
+      "id": "d2",
+      "prompt": "No pulse. Gym staff approach. AED is on the wall 30 feet away.",
+      "options": [
+        { "id": "a", "label": "Send a staff member to fetch the AED, start compressions" },
+        { "id": "b", "label": "Run for the AED yourself" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -15, "o2": -10 }
+    },
+    {
+      "id": "d3",
+      "prompt": "Compressions feel productive. Patient gasps once. Pulse still absent.",
+      "options": [
+        { "id": "a", "label": "Continue compressions; agonal gasps are not a real pulse" },
+        { "id": "b", "label": "Stop and check pulse for 30 seconds" }
+      ],
+      "correct_choice_id": "a",
+      "penalty_delta": { "hr": -20, "o2": -15 }
+    }
+  ]
+}
