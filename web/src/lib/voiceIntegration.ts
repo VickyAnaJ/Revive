@@ -190,19 +190,9 @@ export class VoiceIntegration {
       if (this.hasFiredScenarioIntro) return;
       this.hasFiredScenarioIntro = true;
       const scenario = (e as CustomEvent<Scenario>).detail;
-      const text = this.scenarioToDispatcherText(scenario);
-      if (!text) return;
-      audioQueue.enqueue({
-        channel: 'dispatcher',
-        source: 'streaming',
-        priority: 'med',
-        text,
-        cooldownBucket: 'scenario_intro',
-      });
-      // Scenario-customized Bystander panic line. Fires once per session
-      // alongside the dispatcher reading; AudioQueue serializes them.
-      // Uses scenario context (patient sex / age / location) so the panic
-      // feels specific to this run rather than a generic cached clip.
+      // Scenario-customized Bystander panic line ONLY. Dispatcher no longer
+      // reads the scenario aloud — the on-screen prompt is enough; the
+      // user wants only the bystander voice on the decision screen.
       const bystanderLine = this.scenarioToBystanderText(scenario);
       if (bystanderLine) {
         audioQueue.enqueue({

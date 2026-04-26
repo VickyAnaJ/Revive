@@ -388,10 +388,27 @@ export default function Home() {
       controllerRef.current.selectDecision(nodeId, choiceId);
       setRecordedDecisionIds((prev) => [...prev, nodeId]);
       setDecisionHistory([...controllerRef.current.decisionHistory]);
+      // Scenario-customized Bystander reaction on decision commit.
+      // Fires through the BYSTANDER voice via streaming flash_v2 so the
+      // panic continues to feel specific to this run. Uses scenario state
+      // so the line varies (sex/age/location) per session.
+      if (audioQueueRef.current && scenario) {
+        const { age, sex } = scenario.patient_profile;
+        const pronoun = (sex || '').toLowerCase().startsWith('f') ? 'her' : 'him';
+        const subject = (sex || '').toLowerCase().startsWith('f') ? 'she' : 'he';
+        const location = scenario.location || 'right here';
+        audioQueueRef.current.enqueue({
+          channel: 'bystander',
+          source: 'streaming',
+          priority: 'high',
+          text: `Please, do something — ${subject}'s still not breathing! ${age} years old, in the ${location}, save ${pronoun}!`,
+          cooldownBucket: `bystander_decision_${nodeId}`,
+        });
+      }
     } catch (err) {
       console.warn('[C9] selectDecision failed', err);
     }
-  }, [recordedDecisionIds]);
+  }, [recordedDecisionIds, scenario]);
 
   const handleEndSession = useCallback(() => {
     if (!controllerRef.current) return;
